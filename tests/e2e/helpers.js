@@ -23,7 +23,7 @@ export async function gotoApp(page, hash = '#/', { introSeen = true } = {}) {
       try { localStorage.setItem('emlab.introSeen', '1'); } catch { /* ignore */ }
     }
   }, introSeen);
-  await page.goto('/' + hash);
+  await page.goto('./' + hash);
   await page.waitForFunction(() => window.__emlab && document.querySelector('#view > .module'));
 }
 

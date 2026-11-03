@@ -184,7 +184,7 @@ main { display: block; padding: 16px; max-width: 1400px; margin: 0 auto; outline
 .circuit-view { background: var(--panel); border-radius: var(--radius); padding: 6px; display: grid; gap: 4px; min-width: 0; }
 .cv-title { color: var(--panel-ink); font-weight: 600; padding: 4px 6px 0; }
 .stage { position: relative; width: 100%; min-width: 0; }
-.stage canvas { display: block; width: 100%; border-radius: 8px; touch-action: pan-y; }
+.stage canvas { display: block; width: 100%; border-radius: 8px; touch-action: pan-y pinch-zoom; }
 .stage-problem {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   background: var(--warn-bg); color: var(--warn); border: 1px solid #e9c98f; border-radius: var(--radius-sm);
@@ -230,7 +230,7 @@ main { display: block; padding: 16px; max-width: 1400px; margin: 0 auto; outline
 .nudge:hover { background: var(--surface-2); }
 input[type="range"] {
   flex: 1 1 auto; min-width: 0; height: var(--touch); margin: 0; background: transparent;
-  -webkit-appearance: none; appearance: none; touch-action: pan-y; cursor: pointer;
+  -webkit-appearance: none; appearance: none; touch-action: pan-y pinch-zoom; cursor: pointer;
 }
 input[type="range"]::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--line); }
 input[type="range"]::-moz-range-track { height: 8px; border-radius: 4px; background: var(--line); }
