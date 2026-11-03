@@ -1,7 +1,7 @@
 // Solve-mode answers come from the solver at runtime; cross-check them against analytic formulas.
 import { describe, it, expect } from 'vitest';
 import { close } from './helpers.js';
-import { CIRCUIT_PROBLEMS, RC_PROBLEMS } from '../../js/content/problems.js';
+import { CIRCUIT_PROBLEMS, RC_PROBLEMS, CAP_PROBLEMS } from '../../js/content/problems.js';
 
 function seeded(seed) {
   let s = seed >>> 0;
@@ -90,6 +90,51 @@ describe('M2 problems', () => {
       const tau = (p.R2 + p.R3) * p.C;
       const expected = { tau, Vc: (p.emf * p.R2) / (p.R1 + p.R2), tFifth: tau * Math.log(5) }[p.ask];
       close(pr.variation.answer({}, p).value, expected, 0.003);
+    }
+  });
+});
+
+describe('M3 problems', () => {
+  const EPS0 = 8.8541878128e-12;
+  it('plates: Example 2 key; variations match ε0A/d', () => {
+    const pr = byId(CAP_PROBLEMS, 'plates');
+    const a = (ask) => pr.variation.answer({}, { ...pr.defaults, ask }).value;
+    close(a('C'), 3.54e-9); close(a('Q'), 35.4e-6); close(a('E'), 2.0e6);
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(6);
+    for (let i = 0; i < 50; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const C = (EPS0 * p.A) / p.d;
+      close(pr.variation.answer({}, p).value, { C, Q: C * p.V, E: p.V / p.d }[p.ask], 1e-9);
+    }
+  });
+  it('series capacitors: key (2 µF, 36 µC, 6 V, 12 V); variations match algebra', () => {
+    const pr = byId(CAP_PROBLEMS, 'cap-series');
+    const a = (ask) => pr.variation.answer({}, { ...pr.defaults, ask }).value;
+    close(a('Ceq'), 2e-6); close(a('Q'), 36e-6); close(a('V2'), 12);
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(7);
+    for (let i = 0; i < 20; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const Ceq = (p.C1 * p.C2) / (p.C1 + p.C2);
+      close(pr.variation.answer({}, p).value, { Ceq, Q: Ceq * p.emf, V2: (Ceq * p.emf) / p.C2 }[p.ask], 0.002);
+    }
+  });
+  it('charge sharing: key (80 V, 38.4 mJ, 19.2 mJ heat); variations match algebra', () => {
+    const pr = byId(CAP_PROBLEMS, 'sharing');
+    const a = (ask) => pr.variation.answer({}, { ...pr.defaults, ask }).value;
+    close(a('V'), 80); close(a('Uf'), 0.0384); close(a('heat'), 0.0192, 0.01);
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(8);
+    for (let i = 0; i < 20; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const V = (p.C1 * p.V0) / (p.C1 + p.C2);
+      const Ui = 0.5 * p.C1 * p.V0 ** 2;
+      const Uf = 0.5 * (p.C1 + p.C2) * V * V;
+      close(pr.variation.answer({}, p).value, { V, Uf, heat: Ui - Uf }[p.ask], p.ask === 'heat' ? 0.01 : 0.002);
     }
   });
 });

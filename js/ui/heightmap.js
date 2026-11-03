@@ -74,7 +74,8 @@ export function drawHeightMap(ctx, W, H, layout, sol, o = {}) {
   ctx.fillStyle = 'rgba(120,170,230,0.07)';
   for (const it of items) {
     const { p, info } = it;
-    if (info.kind === 'battery' || info.kind === 'capacitor' || info.kind === 'switch' || p.dotStyle === 'ring') continue;
+    const openSwitch = info.kind === 'switch' && !(info.el && info.el.ref && info.el.ref.closed);
+    if (info.kind === 'battery' || info.kind === 'capacitor' || openSwitch || p.dotStyle === 'ring') continue;
     if (alphaOf(p.id) <= 0.01) continue;
     const fs4 = info.kind === 'wire' ? [0, 1] : [0, p.f0, p.f1, 1];
     ctx.beginPath();

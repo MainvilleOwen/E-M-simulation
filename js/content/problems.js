@@ -3,7 +3,11 @@
 // Pure module (no DOM): `ctx` is supplied by each module's Solve view.
 import { solveDC, equivalentResistance, Transient, estimateTimeConstants } from '../core/circuit.js';
 import { formatSI } from '../core/format.js';
-import { combinationCircuit, twoBatteryCircuit, oneResistor, rcExample1, rcExample2 } from './presets.js';
+import {
+  combinationCircuit, twoBatteryCircuit, oneResistor, rcExample1, rcExample2,
+  capSeriesCircuit, chargeSharingCircuit,
+} from './presets.js';
+import { plateCapacitance } from '../core/formulas.js';
 
 const f = formatSI;
 const randInt = (rand, lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
@@ -276,6 +280,98 @@ export const RC_PROBLEMS = [
         return p.ask === 'Vc' ? { value: n.Vc, unit: 'V' } : { value: n[p.ask], unit: 's' };
       },
       revisit: (p) => ({ tFifth: 5, Vc: 2, tau: 3 }[p.ask]),
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// M3: capacitors
+// ---------------------------------------------------------------------------
+
+/** Run a capacitor circuit to steady state with the transient solver. */
+export function settleCircuit(circuit, taus = 30) {
+  const est = estimateTimeConstants(circuit);
+  const sim = new Transient(circuit, { dt: est.tauMin / 100 });
+  sim.runUntil(est.tauMax * taus);
+  return sim;
+}
+
+export const capSeriesNumbers = memo((p) => {
+  const sim = settleCircuit(capSeriesCircuit(p.emf, p.C1, p.C2));
+  const Q = sim.state.q.C1;
+  return { Q, Ceq: Q / p.emf, V1: sim.state.V.u - sim.state.V.i, V2: sim.state.V.i, island: sim.state.q.C2 - sim.state.q.C1 };
+});
+
+export const sharingNumbers = memo((p) => {
+  const sim = settleCircuit(chargeSharingCircuit(p.C1, p.V0, p.C2, 1, true));
+  const U = sim.storedEnergy();
+  const Ui = 0.5 * p.C1 * p.V0 * p.V0;
+  return { V: sim.state.V.u, Q1: sim.state.q.C1, Q2: sim.state.q.C2, Q0: p.C1 * p.V0, Ui, Uf: U.C1 + U.C2, heat: sim.energy.Rw };
+});
+
+export function plateNumbers(p) {
+  const C = plateCapacitance(p.A, p.d);
+  return { C, Q: C * p.V, E: p.V / p.d, U: 0.5 * C * p.V * p.V };
+}
+
+export const CAP_PROBLEMS = [
+  {
+    id: 'plates',
+    title: 'Parallel plates (Ch 25 Example 2)',
+    defaults: { A: 2, d: 5e-3, V: 10000, ask: 'C' },
+    statement: (p) => `<p>A parallel-plate capacitor has plates of area ${f(p.A, 'm²')} separated by ${f(p.d, 'm')} of vacuum, and is connected to ${f(p.V, 'V')}.</p><p>Find (a) the capacitance, (b) the charge on each plate, and (c) the field between the plates.</p>`,
+    setup: (ctx, p) => ctx.load('plates', p),
+    steps: [
+      { text: (p) => `Capacitance depends only on the geometry: C = ε<sub>0</sub>A / d = (8.85×10<sup>−12</sup>)(${p.A}) / ${f(p.d, 'm')} = ${f(plateNumbers(p).C, 'F')}.`, act: (ctx) => ctx.highlight('C') },
+      { text: (p) => `The battery moves charge until the plates are ${f(p.V, 'V')} apart in height: Q = CV = ${f(plateNumbers(p).Q, 'C')}.`, act: (ctx) => ctx.highlight('Q') },
+      { text: (p) => `The field between the plates is uniform: E = V / d = ${f(plateNumbers(p).E, 'V/m')}.`, act: (ctx) => ctx.highlight('E') },
+    ],
+    variation: {
+      make: (rand) => ({
+        A: pick(rand, [0.5, 1, 1.5, 2, 2.5, 3]), d: pick(rand, [1, 2, 2.5, 4, 5, 8]) * 1e-3, V: pick(rand, [100, 500, 1000, 2000, 5000]),
+        ask: pick(rand, ['C', 'Q', 'E']),
+      }),
+      ask: (p) => ({ C: 'What is the capacitance?', Q: 'What charge sits on the positive plate?', E: 'What is the field between the plates?' }[p.ask]),
+      answer: (ctx, p) => { const n = plateNumbers(p); return { value: n[p.ask], unit: { C: 'F', Q: 'C', E: 'V/m' }[p.ask] }; },
+      revisit: (p) => ({ C: 0, Q: 1, E: 2 }[p.ask]),
+    },
+  },
+  {
+    id: 'cap-series',
+    title: '6 µF and 3 µF in series on 18 V',
+    defaults: { C1: 6e-6, C2: 3e-6, emf: 18, ask: 'V2' },
+    statement: (p) => `<p>Capacitors C<sub>1</sub> = ${f(p.C1, 'F')} and C<sub>2</sub> = ${f(p.C2, 'F')} are connected in series across ${f(p.emf, 'V')}.</p><p>Find the equivalent capacitance, the charge on each, and the voltage across each.</p>`,
+    setup: (ctx, p) => ctx.load('series', p),
+    steps: [
+      { text: () => 'The inner plates and the wire between them form an isolated island: its total charge stays zero.', act: (ctx) => ctx.island() },
+      { text: () => 'So when the battery puts +Q on C<sub>1</sub>’s outer plate, −Q gathers on its inner plate, leaving +Q on C<sub>2</sub>’s inner plate. Both carry the same charge.', act: (ctx) => ctx.charge() },
+      { text: (p) => `In series the steps add: 1/C<sub>eq</sub> = 1/C<sub>1</sub> + 1/C<sub>2</sub>, so C<sub>eq</sub> = ${f(capSeriesNumbers(p).Ceq, 'F')} and Q = C<sub>eq</sub>ε = ${f(capSeriesNumbers(p).Q, 'C')}.`, act: (ctx) => ctx.highlight(['C1', 'C2']) },
+      { text: (p) => { const n = capSeriesNumbers(p); return `The voltages split as Q/C: V<sub>1</sub> = ${f(n.V1, 'V')} and V<sub>2</sub> = ${f(n.V2, 'V')}. The smaller capacitor gets the bigger step.`; }, act: (ctx) => ctx.highlight(['C2']) },
+    ],
+    variation: {
+      make: (rand) => ({ C1: pick(rand, [1, 2, 3, 4, 5, 6, 8, 10, 12]) * 1e-6, C2: pick(rand, [1, 2, 3, 4, 5, 6, 8, 10, 12]) * 1e-6, emf: pick(rand, [6, 9, 12, 18, 24]), ask: pick(rand, ['Q', 'V2', 'Ceq']) }),
+      ask: (p) => ({ Q: 'What charge does each capacitor hold?', V2: `What is the voltage across C<sub>2</sub> = ${f(p.C2, 'F')}?`, Ceq: 'What is the equivalent capacitance?' }[p.ask]),
+      answer: (ctx, p) => { const n = capSeriesNumbers(p); return { value: n[p.ask], unit: { Q: 'C', V2: 'V', Ceq: 'F' }[p.ask] }; },
+      revisit: (p) => ({ Q: 2, V2: 3, Ceq: 2 }[p.ask]),
+    },
+  },
+  {
+    id: 'sharing',
+    title: 'Charge sharing: where did the energy go?',
+    defaults: { C1: 8e-6, V0: 120, C2: 4e-6, ask: 'V' },
+    statement: (p) => `<p>A ${f(p.C1, 'F')} capacitor is charged to ${f(p.V0, 'V')}, disconnected, and then connected to an uncharged ${f(p.C2, 'F')} capacitor.</p><p>Find the final voltage, the charge on each, and the energy before and after.</p>`,
+    setup: (ctx, p) => ctx.load('sharing', p),
+    steps: [
+      { text: (p) => `Before: Q<sub>0</sub> = C<sub>1</sub>V<sub>0</sub> = ${f(sharingNumbers(p).Q0, 'C')} and U<sub>i</sub> = ½C<sub>1</sub>V<sub>0</sub><sup>2</sup> = ${f(sharingNumbers(p).Ui, 'J')}.`, act: (ctx) => ctx.highlight(['C1']) },
+      { text: () => 'Close the switch. Charge flows from the high plate to the low plate until both tops are at the same height.', act: (ctx) => ctx.run() },
+      { text: (p) => { const n = sharingNumbers(p); return `Charge is conserved: V = Q<sub>0</sub> / (C<sub>1</sub> + C<sub>2</sub>) = ${f(n.V, 'V')}, so Q<sub>1</sub> = ${f(n.Q1, 'C')} and Q<sub>2</sub> = ${f(n.Q2, 'C')}.`; }, act: (ctx) => ctx.highlight(['C1', 'C2']) },
+      { text: (p) => { const n = sharingNumbers(p); return `After: U<sub>f</sub> = ½(C<sub>1</sub> + C<sub>2</sub>)V<sup>2</sup> = ${f(n.Uf, 'J')}. The missing ${f(n.Ui - n.Uf, 'J')} was dissipated in the connecting wire while the charge flowed.`; }, act: (ctx) => ctx.highlight(['Rw']) },
+    ],
+    variation: {
+      make: (rand) => ({ C1: pick(rand, [2, 4, 5, 6, 8, 10]) * 1e-6, V0: pick(rand, [24, 50, 60, 100, 120, 150]), C2: pick(rand, [1, 2, 3, 4, 6, 8]) * 1e-6, ask: pick(rand, ['V', 'Uf', 'heat']) }),
+      ask: (p) => ({ V: 'What is the final voltage?', Uf: 'What is the total stored energy afterwards?', heat: 'How much energy is dissipated in the wire?' }[p.ask]),
+      answer: (ctx, p) => { const n = sharingNumbers(p); return { value: n[p.ask], unit: p.ask === 'V' ? 'V' : 'J' }; },
+      revisit: (p) => ({ V: 2, Uf: 3, heat: 3 }[p.ask]),
     },
   },
 ];

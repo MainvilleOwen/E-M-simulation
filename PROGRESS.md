@@ -9,14 +9,14 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [x] Phase 2: UI kit + `#/kitchen-sink` (e2e green, screenshots in checks/phase2 reviewed)
 - [x] Phase 3: M1 Circuits (7 views, e2e green both viewports, checks/phase3 reviewed)
 - [x] Phase 4: M2 RC circuits (charging, discharging, 2 solve problems; e2e green; checks/phase4 reviewed)
-- [ ] Phase 5: M3 Capacitors
+- [x] Phase 5: M3 Capacitors (plate lab, series vs parallel, charge sharing, 3 solve problems; e2e green; checks/phase5 reviewed)
 - [ ] Phase 6: M4 Fields & dipoles
 - [ ] Phase 7: Home, intro, polish, fresh-eyes review
 - [ ] Phase 8: Deploy to GitHub Pages (ask Owen first)
 - [ ] Stretch: Inside a resistor
 
-IN PROGRESS: Phase 5, starting M3 Capacitors
-Next: write js/modules/capacitors.js: plate lab (A, d, ε log slider, connected/disconnected toggle, σ marks, E field lines, C/Q/V/E/U readouts, work-you-did counter = ΔU, clicker predict "C doubles with Q fixed → V halves"), series vs parallel on a battery (island outline, transient charging), charge sharing (8 µF at 120 V + 4 µF, energy before/after, wire R slider), M3 solve problems, tests/e2e/capacitors.spec.js.
+IN PROGRESS: Phase 6, starting M4 Fields & dipoles
+Next: write js/modules/fields.js: field sandbox (up to 4 draggable charges with sign/magnitude, log-scaled clamped arrow grid with ⓘ, optional field lines, draggable probe showing each contribution + vector sum, dipole preset with axis/bisector), dipole in uniform field (±qE forces, torque, damped rotation, τ = pE sinθ, U = −pE cosθ, energy bar), 2 solve problems (superposition, dipole torque), tests/e2e/fields.spec.js.
 
 ## Notes
 
@@ -48,6 +48,11 @@ Next: write js/modules/capacitors.js: plate lab (A, d, ε log slider, connected/
 
 - RC lab time scale is fixed at real time (default τ = 3.00 s); it never rescales when R or C change, so slower really looks slower. Solve presets run at τ_ref/3 (e.g. Example 2 at 0.06×), with a label.
 - Net push ε − q/C is drawn on the height map (pink double arrow at the resistor) and as DOM bars ("The push on the charges").
+
+## M3 notes
+
+- Plate lab (`PlateLab` in capacitors.js): connected locks V, disconnected locks Q. Work you did = ∫F dd for gap moves (analytic per step) and energy bookkeeping for area moves; check line shows W + W_battery = ΔU. Marks/field lines use a display scale set by ε (fixed while A, d change).
+- Series/parallel and charge sharing run the transient solver through 1 Ω of wire, slowed down (label shows the factor). Plate size drawn ∝ √C.
 
 ## Blockers
 

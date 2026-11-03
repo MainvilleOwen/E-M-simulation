@@ -305,7 +305,7 @@ export function capSeriesLayout() {
       B: { kind: 'battery', a: [10, 50], b: [10, 14], labelAt: [4, 32], labelAlign: 'center' },
       S: { kind: 'switch', a: [18, 14], b: [30, 14], labelSide: 1 },
       Rw: { kind: 'resistor', a: [34, 14], b: [46, 14], labelSide: 1, noPush: true },
-      C1: { kind: 'capacitor', a: [52, 14], b: [62, 14], labelAt: [57, 4], labelAlign: 'center' },
+      C1: { kind: 'capacitor', a: [52, 14], b: [62, 14], labelAt: [51, 26], labelAlign: 'right' },
       C2: { kind: 'capacitor', a: [88, 26], b: [88, 40], labelAt: [80, 33], labelAlign: 'right' },
     },
     wires: [
@@ -316,7 +316,7 @@ export function capSeriesLayout() {
       W('wG', '0', [['C2', 1]], [88, 40], [88, 50], [10, 50]),
     ],
     pieces: [P('B'), P('wP'), P('S'), P('wW'), P('Rw'), P('wU'), P('C1'), P('wI'), P('C2'), P('wG')],
-    island: [[57, 6], [96, 6], [96, 31], [80, 31], [80, 22], [57, 22]],
+    island: [[58.5, 6], [96, 6], [96, 30], [80, 30], [80, 21], [58.5, 21]],
   };
 }
 

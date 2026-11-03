@@ -82,18 +82,18 @@ export function placePredict(card, sim, ctrl, life) {
 }
 
 /**
- * Place an element responsively: on wide screens prepend it to `wideParent`; on phones insert it
- * into `narrowParent` right after `narrowAfter` (or first if not given).
+ * Place an element responsively. Wide screens: after `wideAfter` inside `wideParent` (or first).
+ * Phones: after `narrowAfter` inside `narrowParent` (or first).
  */
-export function placeResponsive(el, { wideParent, narrowParent, narrowAfter = null }, life) {
+export function placeResponsive(el, { wideParent, wideAfter = null, narrowParent, narrowAfter = null }, life) {
   const mql = typeof matchMedia === 'function' ? matchMedia('(min-width: 960px)') : null;
+  const put = (parent, after) => {
+    const ref = after ? after.nextSibling : parent.firstChild;
+    if (ref !== el) parent.insertBefore(el, ref);
+  };
   const place = () => {
-    if (mql && mql.matches) {
-      if (el.parentNode !== wideParent || wideParent.firstChild !== el) wideParent.insertBefore(el, wideParent.firstChild);
-    } else {
-      const ref = narrowAfter ? narrowAfter.nextSibling : narrowParent.firstChild;
-      if (ref !== el) narrowParent.insertBefore(el, ref);
-    }
+    if (mql && mql.matches) put(wideParent, wideAfter);
+    else put(narrowParent, narrowAfter);
   };
   place();
   if (mql) life.on(mql, 'change', place);

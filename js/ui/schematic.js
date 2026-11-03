@@ -170,7 +170,7 @@ export function drawSchematic(ctx, T, layout, sol, o = {}) {
       case 'resistor': drawResistor(ctx, g, unit, ww, col(va), col(vb)); break;
       case 'bulb': drawBulb(ctx, g, unit, ww, col(va), col(vb), sol && sol.P ? sol.P[id] : 0, o.pRef || 1); break;
       case 'battery': drawBattery(ctx, g, unit, ww, col(va), col(vb), fs); break;
-      case 'capacitor': drawCapacitor(ctx, g, unit, ww, col(va), col(vb), sol && sol.q ? sol.q[id] || 0 : 0, o.qPerMark || Infinity, o.maxMarks || 12); break;
+      case 'capacitor': drawCapacitor(ctx, g, unit, ww, col(va), col(vb), sol && sol.q ? sol.q[id] || 0 : 0, o.qPerMark || Infinity, o.maxMarks || 12, el.plateScale || 1); break;
       case 'switch': drawSwitch(ctx, g, unit, ww, col(va), col(vb), !!(el.ref && el.ref.closed)); break;
       case 'wire': ctx.strokeStyle = col(va); line(ctx, g.A, g.B); break;
       default: break;
@@ -381,10 +381,10 @@ function drawBattery(ctx, g, unit, ww, ca, cb, fs) {
   ctx.restore();
 }
 
-function drawCapacitor(ctx, g, unit, ww, ca, cb, q, qPerMark, maxMarks = 12) {
+function drawCapacitor(ctx, g, unit, ww, ca, cb, q, qPerMark, maxMarks = 12, plateScale = 1) {
   const gap = 2 * bodyHalf('capacitor', g.L, unit);
   const [p0, p1] = leads(ctx, g, gap / 2, ca, cb);
-  const ph = clamp(unit * 4.8, 14, 28);
+  const ph = clamp(unit * 4.8, 14, 28) * plateScale;
   ctx.lineCap = 'butt';
   ctx.lineWidth = Math.max(4, ww * 1.1);
   ctx.strokeStyle = ca;
