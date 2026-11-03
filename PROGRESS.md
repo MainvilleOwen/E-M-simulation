@@ -8,15 +8,15 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [x] Phase 1: Physics core (circuit.js, fields.js, format.js, section 5 tests): 79 unit tests green
 - [x] Phase 2: UI kit + `#/kitchen-sink` (e2e green, screenshots in checks/phase2 reviewed)
 - [x] Phase 3: M1 Circuits (7 views, e2e green both viewports, checks/phase3 reviewed)
-- [ ] Phase 4: M2 RC circuits
+- [x] Phase 4: M2 RC circuits (charging, discharging, 2 solve problems; e2e green; checks/phase4 reviewed)
 - [ ] Phase 5: M3 Capacitors
 - [ ] Phase 6: M4 Fields & dipoles
 - [ ] Phase 7: Home, intro, polish, fresh-eyes review
 - [ ] Phase 8: Deploy to GitHub Pages (ask Owen first)
 - [ ] Stretch: Inside a resistor
 
-IN PROGRESS: Phase 4, starting M2 RC circuits
-Next: write js/modules/rc.js (charging + discharging with SPDT switch, net push ε − q/C arrow, q/I/V_C live plots with τ, 63%, 37% markers and ghost traces, time controls at a fixed per-preset time scale, R and C sliders replay), RC solve problems (Examples 1 and 2) in problems.js, tests/e2e/rc.spec.js.
+IN PROGRESS: Phase 5, starting M3 Capacitors
+Next: write js/modules/capacitors.js: plate lab (A, d, ε log slider, connected/disconnected toggle, σ marks, E field lines, C/Q/V/E/U readouts, work-you-did counter = ΔU, clicker predict "C doubles with Q fixed → V halves"), series vs parallel on a battery (island outline, transient charging), charge sharing (8 µF at 120 V + 4 µF, energy before/after, wire R slider), M3 solve problems, tests/e2e/capacitors.spec.js.
 
 ## Notes
 
@@ -43,6 +43,11 @@ Next: write js/modules/rc.js (charging + discharging with SPDT switch, net push 
 - Views: `#/circuits/one|series|parallel|combination|bulbs|kirchhoff|solve`. Parallel opens in compare mode with a prediction; switches close when she picks.
 - `js/ui/reduce.js` (StageAnimator: highlight a group, then cross-fade to the reduced circuit; every stage is solved fresh). `js/ui/loop-walk.js` (marker + running loop sum).
 - `placePredict()` puts prediction cards top-right on wide screens, above the sim on phones.
+
+## M2 notes
+
+- RC lab time scale is fixed at real time (default τ = 3.00 s); it never rescales when R or C change, so slower really looks slower. Solve presets run at τ_ref/3 (e.g. Example 2 at 0.06×), with a label.
+- Net push ε − q/C is drawn on the height map (pink double arrow at the resistor) and as DOM bars ("The push on the charges").
 
 ## Blockers
 

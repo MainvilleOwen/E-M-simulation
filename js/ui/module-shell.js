@@ -80,3 +80,21 @@ export function placePredict(card, sim, ctrl, life) {
   place();
   if (mql) life.on(mql, 'change', place);
 }
+
+/**
+ * Place an element responsively: on wide screens prepend it to `wideParent`; on phones insert it
+ * into `narrowParent` right after `narrowAfter` (or first if not given).
+ */
+export function placeResponsive(el, { wideParent, narrowParent, narrowAfter = null }, life) {
+  const mql = typeof matchMedia === 'function' ? matchMedia('(min-width: 960px)') : null;
+  const place = () => {
+    if (mql && mql.matches) {
+      if (el.parentNode !== wideParent || wideParent.firstChild !== el) wideParent.insertBefore(el, wideParent.firstChild);
+    } else {
+      const ref = narrowAfter ? narrowAfter.nextSibling : narrowParent.firstChild;
+      if (ref !== el) narrowParent.insertBefore(el, ref);
+    }
+  };
+  place();
+  if (mql) life.on(mql, 'change', place);
+}

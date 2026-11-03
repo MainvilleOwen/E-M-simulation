@@ -117,7 +117,7 @@ export class CircuitView {
     const H = this.schem.h;
     const padL = 40; // room for the height map's level labels left of the battery lift
     const padR = 20;
-    const padTop = this.layout.padTop || 30;
+    const padTop = this.layout.padTop || 44;
     const padBottom = this.layout.padBottom || 12;
     const scale = Math.max(0.01, Math.min((W - padL - padR) / b.w, (H - padTop - padBottom) / b.h));
     const ox = padL + (W - padL - padR - b.w * scale) / 2 - b.x * scale;
@@ -138,7 +138,7 @@ export class CircuitView {
       drawSchematic(ctx, T, this.layout, sol, {
         vMin: s.vMin, vMax: s.vMax,
         pushPerVolt: s.pushPerVolt ? s.pushPerVolt * T.scale : null,
-        pRef: s.pRef, qPerMark: s.qPerMark,
+        pRef: s.pRef, qPerMark: s.qPerMark, maxMarks: s.maxMarks,
         labels: x.labels, highlight: x.highlight, alpha: x.alpha,
         dots: sol ? this.dots : null, dotStyles: x.dotStyles,
         marker: x.marker, assumed: x.assumed,

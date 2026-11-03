@@ -1,7 +1,7 @@
 // Solve-mode answers come from the solver at runtime; cross-check them against analytic formulas.
 import { describe, it, expect } from 'vitest';
 import { close } from './helpers.js';
-import { CIRCUIT_PROBLEMS } from '../../js/content/problems.js';
+import { CIRCUIT_PROBLEMS, RC_PROBLEMS } from '../../js/content/problems.js';
 
 function seeded(seed) {
   let s = seed >>> 0;
@@ -56,6 +56,40 @@ describe('M1 problems', () => {
     for (let i = 0; i < 100; i++) {
       const p = pr.variation.make(rand);
       close(pr.variation.answer({}, p).value, (p.V * p.V) / p.R, 1e-6);
+    }
+  });
+});
+
+describe('M2 problems', () => {
+  it('RC Example 1 matches the key; variations match RC algebra', () => {
+    const pr = byId(RC_PROBLEMS, 'rc-ex1');
+    const a = (ask) => pr.variation.answer({}, { ...pr.defaults, ask }).value;
+    close(a('tauBefore'), 1.5);
+    close(a('tauAfter'), 1.0);
+    close(a('Is0'), 300e-6);
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(4);
+    for (let i = 0; i < 40; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const expected = { tauBefore: (p.R1 + p.R2) * p.C, tauAfter: p.R2 * p.C, Is0: p.emf / p.R1 + p.emf / p.R2 }[p.ask];
+      close(pr.variation.answer({}, p).value, expected, 0.002);
+    }
+  });
+  it('RC Example 2 matches the key; variations match RC algebra', () => {
+    const pr = byId(RC_PROBLEMS, 'rc-ex2');
+    const a = (ask) => pr.variation.answer({}, { ...pr.defaults, ask }).value;
+    close(a('tFifth'), 0.290);
+    close(a('Vc'), 5.0);
+    close(a('tau'), 0.18);
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(5);
+    for (let i = 0; i < 40; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const tau = (p.R2 + p.R3) * p.C;
+      const expected = { tau, Vc: (p.emf * p.R2) / (p.R1 + p.R2), tFifth: tau * Math.log(5) }[p.ask];
+      close(pr.variation.answer({}, p).value, expected, 0.003);
     }
   });
 });

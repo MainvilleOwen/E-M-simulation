@@ -1,9 +1,9 @@
 // Solve-mode problems: statement, worked steps (each one sentence plus an action on the sim),
 // and a variation generator. Every number shown is computed by the solver at runtime.
 // Pure module (no DOM): `ctx` is supplied by each module's Solve view.
-import { solveDC, equivalentResistance } from '../core/circuit.js';
+import { solveDC, equivalentResistance, Transient, estimateTimeConstants } from '../core/circuit.js';
 import { formatSI } from '../core/format.js';
-import { combinationCircuit, twoBatteryCircuit, oneResistor } from './presets.js';
+import { combinationCircuit, twoBatteryCircuit, oneResistor, rcExample1, rcExample2 } from './presets.js';
 
 const f = formatSI;
 const randInt = (rand, lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
@@ -145,6 +145,137 @@ export const CIRCUIT_PROBLEMS = [
       ask: () => 'What power does the heater use?',
       answer: (ctx, p) => ({ value: solveDC(oneResistor(p.V, p.R)).P.R1, unit: 'W' }),
       revisit: 2,
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// M2: RC circuits
+// ---------------------------------------------------------------------------
+
+const memo = (fn) => {
+  const cache = new Map();
+  return (p) => {
+    const key = JSON.stringify(p);
+    if (!cache.has(key)) { if (cache.size > 50) cache.clear(); cache.set(key, fn(p)); }
+    return cache.get(key);
+  };
+};
+
+/** RC Example 1 numbers, all from the solver. */
+export const rcEx1Numbers = memo(rcEx1NumbersRaw);
+function rcEx1NumbersRaw(p) {
+  const open = rcExample1(p, false, 0);
+  const tauBefore = estimateTimeConstants(open).tauMin;
+  const full = solveDC(rcExample1(p, false, 0));
+  const Q = full.q.C;
+  const closedC = rcExample1(p, true, Q);
+  const tauAfter = estimateTimeConstants(closedC).tauMin;
+  const sim = new Transient(closedC, { dt: tauAfter / 400 });
+  const Is0 = sim.state.I.S;
+  const steady = solveDC(rcExample1(p, true, Q));
+  const Ileft = steady.I.S; // long after closing only the battery loop carries current
+  return { tauBefore, tauAfter, Q, Vc: Q / p.C, Is0, Ileft, Icap0: Is0 - Ileft };
+}
+
+/** RC Example 2 numbers, all from the solver. */
+export const rcEx2Numbers = memo(rcEx2NumbersRaw);
+function rcEx2NumbersRaw(p) {
+  const dc = solveDC(rcExample2(p, true, 0));
+  const Q = dc.q.C;
+  const openC = rcExample2(p, false, Q);
+  const tau = estimateTimeConstants(openC).tauMin;
+  const sim = new Transient(openC, { dt: tau / 2000 });
+  const IR2_0 = sim.state.I.R2;
+  let prevQ = sim.state.q.C;
+  let prevT = 0;
+  while (sim.state.q.C > Q / 5 && sim.t < 20 * tau) { prevQ = sim.state.q.C; prevT = sim.t; sim.step(); }
+  const tFifth = prevT + ((prevQ - Q / 5) / (prevQ - sim.state.q.C)) * (sim.t - prevT);
+  return { I12: dc.I.R1, I3: dc.I.R3, Vc: dc.V.c, Q, tau, IR2_0, tFifth };
+}
+
+const kOhm = (x) => f(x, 'Ω');
+
+export const RC_PROBLEMS = [
+  {
+    id: 'rc-ex1',
+    title: 'RC Example 1: a switch across the middle',
+    defaults: { emf: 10, R1: 50e3, R2: 100e3, C: 10e-6, ask: 'Is0' },
+    statement: (p) => `<p>A ${f(p.emf, 'V')} battery, R<sub>1</sub> = ${kOhm(p.R1)} and R<sub>2</sub> = ${kOhm(p.R2)} run along the top to a ${f(p.C, 'F')} capacitor. A switch S connects the point between R<sub>1</sub> and R<sub>2</sub> to the bottom wire.</p>
+      <p>(a) With S open, what is the charging time constant? (b) S has been open a long time and is then closed. What is the new time constant? (c) Find the current in the switch as a function of time.</p>`,
+    setup: (ctx, p) => ctx.load('ex1', p),
+    steps: [
+      {
+        text: (p) => `With S open there is one loop: battery, R<sub>1</sub>, R<sub>2</sub> and C. The capacitor charges through R<sub>1</sub> + R<sub>2</sub>: τ = (R<sub>1</sub> + R<sub>2</sub>)C = ${f(rcEx1Numbers(p).tauBefore, 's')}.`,
+        act: (ctx) => ctx.chargeOpen(),
+      },
+      {
+        text: (p) => { const n = rcEx1Numbers(p); return `After a long time the capacitor is full: Q = Cε = ${f(n.Q, 'C')}, V<sub>C</sub> = ${f(n.Vc, 'V')}, and no current flows.`; },
+        act: (ctx) => ctx.full(),
+      },
+      {
+        text: (p) => `Close S. The left loop (battery, R<sub>1</sub>, S) at once carries ε / R<sub>1</sub> = ${f(rcEx1Numbers(p).Ileft, 'A')} through the switch.`,
+        act: (ctx) => ctx.closeSwitch(['B', 'R1', 'wP', 'wM1', 'wMs', 'S', 'wGs', 'wG2']),
+      },
+      {
+        text: (p) => { const n = rcEx1Numbers(p); return `The right loop (C, R<sub>2</sub>, S) discharges with τ = R<sub>2</sub>C = ${f(n.tauAfter, 's')}, starting at V<sub>C</sub> / R<sub>2</sub> = ${f(n.Icap0, 'A')}.`; },
+        act: (ctx) => ctx.highlight(['C', 'R2', 'wY', 'wM2', 'wMs', 'S', 'wGs', 'wG1']),
+      },
+      {
+        text: (p) => { const n = rcEx1Numbers(p); return `Both currents run down through the switch: I<sub>S</sub>(t) = ${f(n.Ileft, 'A')} + (${f(n.Icap0, 'A')})·e<sup>−t/${f(n.tauAfter, 's')}</sup>.`; },
+        act: (ctx) => ctx.highlight(['S']),
+      },
+    ],
+    variation: {
+      make: (rand) => ({
+        emf: pick(rand, [6, 9, 10, 12, 15, 20]),
+        R1: randInt(rand, 2, 20) * 10e3, R2: randInt(rand, 2, 20) * 10e3, C: pick(rand, [2, 4.7, 5, 10, 20, 22]) * 1e-6,
+        ask: pick(rand, ['Is0', 'tauAfter', 'tauBefore']),
+      }),
+      ask: (p) => ({
+        Is0: 'What is the current in the switch just after it closes?',
+        tauAfter: 'What is the time constant after the switch closes?',
+        tauBefore: 'What is the charging time constant with the switch open?',
+      }[p.ask]),
+      answer: (ctx, p) => {
+        const n = rcEx1Numbers(p);
+        return p.ask === 'Is0' ? { value: n.Is0, unit: 'A' } : { value: n[p.ask], unit: 's' };
+      },
+      revisit: (p) => ({ Is0: 4, tauAfter: 3, tauBefore: 0 }[p.ask]),
+    },
+  },
+  {
+    id: 'rc-ex2',
+    title: 'RC Example 2: open the switch',
+    defaults: { emf: 9, R1: 12e3, R2: 15e3, R3: 3e3, C: 10e-6, ask: 'tFifth' },
+    statement: (p) => `<p>A ${f(p.emf, 'V')} battery and a switch drive R<sub>1</sub> = ${kOhm(p.R1)} into a node. From that node, R<sub>2</sub> = ${kOhm(p.R2)} goes to the bottom wire, and so does R<sub>3</sub> = ${kOhm(p.R3)} in series with C = ${f(p.C, 'F')}.</p>
+      <p>(a) Long after the switch is closed, find the currents and the capacitor’s charge. (b) The switch is then opened. Find τ and the current in R<sub>2</sub> as a function of time. (c) How long until the charge falls to one fifth?</p>`,
+    setup: (ctx, p) => ctx.load('ex2', p),
+    steps: [
+      { text: () => 'Long after closing, the capacitor is full and its branch carries no current: a full capacitor blocks steady current.', act: (ctx) => ctx.toSteady(['R3', 'C', 'wA3', 'wC', 'wG3']) },
+      { text: (p) => { const n = rcEx2Numbers(p); return `So R<sub>1</sub> and R<sub>2</sub> are simply in series: I = ${f(p.emf, 'V')} / ${kOhm(p.R1 + p.R2)} = ${f(n.I12, 'A')}.`; }, act: (ctx) => ctx.highlight(['R1', 'R2']) },
+      { text: (p) => { const n = rcEx2Numbers(p); return `The capacitor sits across R<sub>2</sub> (no drop in R<sub>3</sub>): V<sub>C</sub> = ${f(n.I12, 'A')} × ${kOhm(p.R2)} = ${f(n.Vc, 'V')}, so Q = CV<sub>C</sub> = ${f(n.Q, 'C')}.`; }, act: (ctx) => ctx.highlight(['C', 'R2']) },
+      { text: (p) => `Open the switch. The battery is cut off, and the capacitor discharges through R<sub>3</sub> and R<sub>2</sub> in series: τ = (R<sub>2</sub> + R<sub>3</sub>)C = ${f(rcEx2Numbers(p).tau, 's')}.`, act: (ctx) => ctx.openSwitch(['C', 'R3', 'R2', 'wA2', 'wA3', 'wC', 'wG2', 'wG3']) },
+      { text: (p) => { const n = rcEx2Numbers(p); return `I<sub>R2</sub>(t) = (V<sub>C</sub> / (R<sub>2</sub> + R<sub>3</sub>)) e<sup>−t/τ</sup> = ${f(n.IR2_0, 'A')}·e<sup>−t/${f(n.tau, 's')}</sup>.`; }, act: (ctx) => ctx.highlight(['R2']) },
+      { text: (p) => { const n = rcEx2Numbers(p); return `One fifth of the charge: e<sup>−t/τ</sup> = 1/5, so t = τ ln 5 = ${f(n.tFifth, 's')}.`; }, act: (ctx) => ctx.markFifth() },
+    ],
+    variation: {
+      make: (rand) => ({
+        emf: pick(rand, [6, 9, 12, 15, 18]),
+        R1: randInt(rand, 2, 30) * 1e3, R2: randInt(rand, 2, 30) * 1e3, R3: randInt(rand, 1, 10) * 1e3,
+        C: pick(rand, [2.2, 4.7, 5, 10, 22]) * 1e-6,
+        ask: pick(rand, ['tFifth', 'Vc', 'tau']),
+      }),
+      ask: (p) => ({
+        tFifth: 'After the switch opens, how long until the charge falls to one fifth?',
+        Vc: 'Long after the switch closes, what is the capacitor voltage?',
+        tau: 'What is the time constant after the switch opens?',
+      }[p.ask]),
+      answer: (ctx, p) => {
+        const n = rcEx2Numbers(p);
+        return p.ask === 'Vc' ? { value: n.Vc, unit: 'V' } : { value: n[p.ask], unit: 's' };
+      },
+      revisit: (p) => ({ tFifth: 5, Vc: 2, tau: 3 }[p.ask]),
     },
   },
 ];

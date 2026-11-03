@@ -170,7 +170,7 @@ export function drawSchematic(ctx, T, layout, sol, o = {}) {
       case 'resistor': drawResistor(ctx, g, unit, ww, col(va), col(vb)); break;
       case 'bulb': drawBulb(ctx, g, unit, ww, col(va), col(vb), sol && sol.P ? sol.P[id] : 0, o.pRef || 1); break;
       case 'battery': drawBattery(ctx, g, unit, ww, col(va), col(vb), fs); break;
-      case 'capacitor': drawCapacitor(ctx, g, unit, ww, col(va), col(vb), sol && sol.q ? sol.q[id] || 0 : 0, o.qPerMark || Infinity); break;
+      case 'capacitor': drawCapacitor(ctx, g, unit, ww, col(va), col(vb), sol && sol.q ? sol.q[id] || 0 : 0, o.qPerMark || Infinity, o.maxMarks || 12); break;
       case 'switch': drawSwitch(ctx, g, unit, ww, col(va), col(vb), !!(el.ref && el.ref.closed)); break;
       case 'wire': ctx.strokeStyle = col(va); line(ctx, g.A, g.B); break;
       default: break;
@@ -381,7 +381,7 @@ function drawBattery(ctx, g, unit, ww, ca, cb, fs) {
   ctx.restore();
 }
 
-function drawCapacitor(ctx, g, unit, ww, ca, cb, q, qPerMark) {
+function drawCapacitor(ctx, g, unit, ww, ca, cb, q, qPerMark, maxMarks = 12) {
   const gap = 2 * bodyHalf('capacitor', g.L, unit);
   const [p0, p1] = leads(ctx, g, gap / 2, ca, cb);
   const ph = clamp(unit * 4.8, 14, 28);
@@ -393,12 +393,12 @@ function drawCapacitor(ctx, g, unit, ww, ca, cb, q, qPerMark) {
   line(ctx, [p1[0] - g.n[0] * ph, p1[1] - g.n[1] * ph], [p1[0] + g.n[0] * ph, p1[1] + g.n[1] * ph]);
   ctx.lineCap = 'round';
   // Charge marks: + on the positive plate, − on the negative plate, count ∝ |q|
-  const marks = Math.min(12, Math.round(Math.abs(q) / qPerMark));
+  const marks = Math.min(maxMarks, Math.round(Math.abs(q) / qPerMark));
   if (marks > 0 && Number.isFinite(marks)) {
     const posPlate = q > 0 ? p0 : p1;
     const negPlate = q > 0 ? p1 : p0;
     const inward = q > 0 ? 1 : -1; // from plate a toward plate b
-    const m = clamp(unit * 0.9, 3, 5);
+    const m = Math.min(clamp(unit * 0.9, 3, 5), (ph * 0.85) / Math.max(1, marks - 1) * 0.45 + 1.5);
     for (let k = 0; k < marks; k++) {
       const f = marks === 1 ? 0 : -1 + (2 * k) / (marks - 1);
       const along = f * ph * 0.85;

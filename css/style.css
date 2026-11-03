@@ -356,3 +356,19 @@ input[type="range"]:focus-visible { outline: 3px solid var(--focus); outline-off
 .bulb-part { margin-bottom: 24px; }
 .bulb-part h2 { margin-top: 8px; }
 .compare-hint { margin: 0; }
+
+/* ---------- M2 extras ---------- */
+.push-bars { display: grid; gap: 6px; }
+.pb-row { display: grid; grid-template-columns: minmax(0, 11em) minmax(60px, 1fr) 4.5em; gap: 8px; align-items: center; }
+.pb-label { font-size: 0.9375rem; }
+.pb-track { height: 14px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+.pb-fill { display: block; height: 100%; border-radius: 7px; transition: width 0.08s linear; }
+.pb-bat { background: #e0c200; }
+.pb-cap { background: var(--neg); }
+.pb-net { background: var(--push); }
+.pb-val { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; font-size: 0.9375rem; }
+.pb-note { margin: 2px 0 0; }
+.panel-note-light { margin: 0; color: var(--muted); }
+.info-line { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.solve-time { padding: 10px 12px; }
+@media (max-width: 420px) { .pb-row { grid-template-columns: minmax(0, 1fr) 4.5em; } .pb-track { grid-column: 1 / -1; grid-row: 2; } }
