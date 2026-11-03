@@ -17,11 +17,12 @@ export function trackErrors(page) {
 }
 
 export async function gotoApp(page, hash = '#/', { introSeen = true } = {}) {
-  if (introSeen) {
-    await page.addInitScript(() => {
+  await page.addInitScript((seen) => {
+    window.__emlabAlwaysDraw = true;
+    if (seen) {
       try { localStorage.setItem('emlab.introSeen', '1'); } catch { /* ignore */ }
-    });
-  }
+    }
+  }, introSeen);
   await page.goto('/' + hash);
   await page.waitForFunction(() => window.__emlab && document.querySelector('#view > .module'));
 }
@@ -56,4 +57,40 @@ export async function sweepRange(page, locator, label = '') {
 export async function shot(page, phase, name, testInfo) {
   const project = testInfo.project.name;
   await page.screenshot({ path: `checks/${phase}/${name}-${project}.png`, fullPage: true });
+}
+
+/** Walk a solve problem to its end, then check a variation accepts the right answer and rejects a wrong one. */
+export async function walkSolve(page, scope) {
+  const next = scope.locator('.solve-next');
+  for (let i = 0; i < 20 && await next.isVisible(); i++) {
+    await next.click();
+  }
+  await expect(scope.locator('.solve-variation')).toBeVisible();
+  const steps = await scope.locator('.step').count();
+  expect(steps).toBeGreaterThan(1);
+  await expectNoBadText(page, 'after solve steps');
+  await scope.locator('.solve-variation').click();
+  const ans = await page.evaluate(() => window.__emlab.lastAnswer);
+  expect(Number.isFinite(ans.value)).toBe(true);
+  const input = scope.locator('.answer-input');
+  await input.fill(String(ans.value * 1.01));
+  await scope.locator('.answer-check').click();
+  await expect(scope.locator('.feedback')).toHaveClass(/good/);
+  await input.fill(String(ans.value * 1.5 + (ans.value === 0 ? 1 : 0)));
+  await scope.locator('.answer-check').click();
+  await expect(scope.locator('.feedback')).toHaveClass(/off/);
+  await expect(scope.locator('.feedback')).toContainText('Revisit step');
+  await expectNoBadText(page, 'after variation');
+}
+
+/** Sweep every range input inside a scope to min, mid and max. */
+export async function sweepAll(page, scope, label = '') {
+  const ranges = scope.locator('input[type="range"]');
+  const n = await ranges.count();
+  for (let i = 0; i < n; i++) {
+    const r = ranges.nth(i);
+    if (!(await r.isEnabled())) continue;
+    await sweepRange(page, r, `${label} slider ${i}`);
+  }
+  return n;
 }
