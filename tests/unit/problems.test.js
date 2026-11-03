@@ -1,7 +1,7 @@
 // Solve-mode answers come from the solver at runtime; cross-check them against analytic formulas.
 import { describe, it, expect } from 'vitest';
 import { close } from './helpers.js';
-import { CIRCUIT_PROBLEMS, RC_PROBLEMS, CAP_PROBLEMS } from '../../js/content/problems.js';
+import { CIRCUIT_PROBLEMS, RC_PROBLEMS, CAP_PROBLEMS, FIELD_PROBLEMS } from '../../js/content/problems.js';
 
 function seeded(seed) {
   let s = seed >>> 0;
@@ -135,6 +135,40 @@ describe('M3 problems', () => {
       const Ui = 0.5 * p.C1 * p.V0 ** 2;
       const Uf = 0.5 * (p.C1 + p.C2) * V * V;
       close(pr.variation.answer({}, p).value, { V, Uf, heat: Ui - Uf }[p.ask], p.ask === 'heat' ? 0.01 : 0.002);
+    }
+  });
+});
+
+describe('M4 problems', () => {
+  const k = 8.9875517923e9;
+  it('superposition: like charges above the midpoint; variations match components', () => {
+    const pr = byId(FIELD_PROBLEMS, 'superposition');
+    // 2 nC at r = 5 cm: E = k q / r² each; x parts cancel, y parts add (4/5)
+    close(pr.variation.answer({}, pr.defaults).value, 2 * ((k * 2e-9) / 0.05 ** 2) * 0.8);
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(9);
+    for (let i = 0; i < 100; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const r = Math.hypot(p.a, p.y);
+      const e = (q, sx) => [(k * q) / r ** 2 * (sx * p.a) / r, (k * q) / r ** 2 * p.y / r];
+      const [x1, y1] = e(p.q1, 1);
+      const [x2, y2] = e(p.q2, -1);
+      close(pr.variation.answer({}, p).value, Math.hypot(x1 + x2, y1 + y2), 1e-9);
+    }
+  });
+  it('dipole: τ = pE sin θ and U = −pE cos θ', () => {
+    const pr = byId(FIELD_PROBLEMS, 'dipole');
+    close(pr.variation.answer({}, { ...pr.defaults, ask: 'tau' }).value, 1.0e-6);
+    close(pr.variation.answer({}, { ...pr.defaults, ask: 'U' }).value, -4e-11 * 5e4 * Math.cos(Math.PI / 6));
+    checkTexts(pr, pr.defaults);
+    const rand = seeded(10);
+    for (let i = 0; i < 50; i++) {
+      const p = pr.variation.make(rand);
+      checkTexts(pr, p);
+      const th = (p.theta * Math.PI) / 180;
+      const pm = p.q * p.d;
+      close(pr.variation.answer({}, p).value, p.ask === 'tau' ? pm * p.E * Math.abs(Math.sin(th)) : -pm * p.E * Math.cos(th), 1e-9);
     }
   });
 });

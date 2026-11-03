@@ -10,13 +10,13 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [x] Phase 3: M1 Circuits (7 views, e2e green both viewports, checks/phase3 reviewed)
 - [x] Phase 4: M2 RC circuits (charging, discharging, 2 solve problems; e2e green; checks/phase4 reviewed)
 - [x] Phase 5: M3 Capacitors (plate lab, series vs parallel, charge sharing, 3 solve problems; e2e green; checks/phase5 reviewed)
-- [ ] Phase 6: M4 Fields & dipoles
+- [x] Phase 6: M4 Fields & dipoles (sandbox, dipole, 2 solve problems; e2e green; checks/phase6 reviewed)
 - [ ] Phase 7: Home, intro, polish, fresh-eyes review
 - [ ] Phase 8: Deploy to GitHub Pages (ask Owen first)
 - [ ] Stretch: Inside a resistor
 
-IN PROGRESS: Phase 6, starting M4 Fields & dipoles
-Next: write js/modules/fields.js: field sandbox (up to 4 draggable charges with sign/magnitude, log-scaled clamped arrow grid with ⓘ, optional field lines, draggable probe showing each contribution + vector sum, dipole preset with axis/bisector), dipole in uniform field (±qE forces, torque, damped rotation, τ = pE sinθ, U = −pE cosθ, energy bar), 2 solve problems (superposition, dipole torque), tests/e2e/fields.spec.js.
+IN PROGRESS: Phase 7, home screen + intro + polish + fresh-eyes review
+Next: write js/modules/home.js (4 cards with one-line questions), js/ui/intro.js (30-second "How to read this app": height = voltage, dots = current, push arrows; first visit + reopen from header), NaN guard banner check, e2e for home/intro, then the fresh-eyes subagent review and fixes.
 
 ## Notes
 
@@ -53,6 +53,11 @@ Next: write js/modules/fields.js: field sandbox (up to 4 draggable charges with 
 
 - Plate lab (`PlateLab` in capacitors.js): connected locks V, disconnected locks Q. Work you did = ∫F dd for gap moves (analytic per step) and energy bookkeeping for area moves; check line shows W + W_battery = ΔU. Marks/field lines use a display scale set by ε (fixed while A, d change).
 - Series/parallel and charge sharing run the transient solver through 1 Ω of wire, slowed down (label shows the factor). Plate size drawn ∝ √C.
+
+## M4 notes
+
+- Sandbox: grid arrows log-scaled and clamped (300 N/C to 300 kN/C), probe arrows linear so they add tip to tail. Touch drags only block scrolling when they start on a charge/probe (or near the dipole).
+- Dipole inertia chosen so one swing takes ~2.5 s at defaults (ⓘ note says so).
 
 ## Blockers
 

@@ -8,6 +8,7 @@ import {
   capSeriesCircuit, chargeSharingCircuit,
 } from './presets.js';
 import { plateCapacitance } from '../core/formulas.js';
+import { fieldAt, fieldContributions, dipoleForces, dipoleEnergy, K } from '../core/fields.js';
 
 const f = formatSI;
 const randInt = (rand, lo, hi) => lo + Math.floor(rand() * (hi - lo + 1));
@@ -375,3 +376,71 @@ export const CAP_PROBLEMS = [
     },
   },
 ];
+
+// ---------------------------------------------------------------------------
+// M4: fields and dipoles
+// ---------------------------------------------------------------------------
+
+/** Field at P = (0, y) from q1 at (−a, 0) and q2 at (+a, 0). Positions in m, charges in C. */
+export function superpositionNumbers(p) {
+  const charges = [{ x: -p.a, y: 0, q: p.q1 }, { x: p.a, y: 0, q: p.q2 }];
+  const parts = fieldContributions(charges, 0, p.y);
+  const E = fieldAt(charges, 0, p.y);
+  const r = Math.hypot(p.a, p.y);
+  return { charges, r, E1: Math.hypot(parts[0].Ex, parts[0].Ey), E2: Math.hypot(parts[1].Ex, parts[1].Ey), Ex: E.Ex, Ey: E.Ey, E: Math.hypot(E.Ex, E.Ey) };
+}
+
+export function dipoleNumbers(p) {
+  const th = (p.theta * Math.PI) / 180;
+  const fz = dipoleForces(p.q, p.d, p.E, th);
+  return { p: p.q * p.d, F: p.q * p.E, net: Math.hypot(fz.net.x, fz.net.y), tau: Math.abs(fz.torque), U: dipoleEnergy(p.q * p.d, p.E, th) };
+}
+
+const cm = (m) => `${formatSI(m * 100, '', { sig: 3 }).trim()} cm`;
+const nC = (q) => `${q > 0 ? '+' : '−'}${formatSI(Math.abs(q) * 1e9, '', { sig: 3 }).trim()} nC`;
+
+export const FIELD_PROBLEMS = [
+  {
+    id: 'superposition',
+    title: 'Superposition: field at a point',
+    defaults: { q1: 2e-9, q2: 2e-9, a: 0.03, y: 0.04 },
+    statement: (p) => `<p>Charge q<sub>1</sub> = ${nC(p.q1)} sits at (−${cm(p.a)}, 0) and q<sub>2</sub> = ${nC(p.q2)} at (+${cm(p.a)}, 0).</p><p>Find the magnitude of the electric field at P = (0, ${cm(p.y)}).</p>`,
+    setup: (ctx, p) => ctx.load('superposition', p),
+    steps: [
+      { text: (p) => `Each charge is r = √(${cm(p.a)}² + ${cm(p.y)}²) = ${cm(superpositionNumbers(p).r)} from P.`, act: (ctx) => ctx.show('distance') },
+      { text: (p) => { const n = superpositionNumbers(p); return `Each one alone: E = k|q|/r². E<sub>1</sub> = ${f(n.E1, 'N/C')} ${p.q1 > 0 ? 'away from' : 'toward'} q<sub>1</sub>; E<sub>2</sub> = ${f(n.E2, 'N/C')} ${p.q2 > 0 ? 'away from' : 'toward'} q<sub>2</sub>.`; }, act: (ctx) => ctx.show('parts') },
+      { text: (p) => { const n = superpositionNumbers(p); return `Add them as vectors, component by component: E<sub>x</sub> = ${f(n.Ex, 'N/C')}, E<sub>y</sub> = ${f(n.Ey, 'N/C')}.`; }, act: (ctx) => ctx.show('sum') },
+      { text: (p) => `|E| = √(E<sub>x</sub>² + E<sub>y</sub>²) = ${f(superpositionNumbers(p).E, 'N/C')}.`, act: (ctx) => ctx.show('sum') },
+    ],
+    variation: {
+      make: (rand) => ({
+        q1: pick(rand, [1, 2, 3, 4, 5]) * 1e-9 * (rand() < 0.5 ? -1 : 1),
+        q2: pick(rand, [1, 2, 3, 4, 5]) * 1e-9 * (rand() < 0.5 ? -1 : 1),
+        a: pick(rand, [2, 3, 4, 5]) * 1e-2, y: pick(rand, [2, 3, 4, 5, 6]) * 1e-2,
+      }),
+      ask: () => 'What is the magnitude of the field at P?',
+      answer: (ctx, p) => ({ value: superpositionNumbers(p).E, unit: 'N/C' }),
+      revisit: 2,
+    },
+  },
+  {
+    id: 'dipole',
+    title: 'A dipole in a uniform field',
+    defaults: { q: 2e-9, d: 0.02, E: 5e4, theta: 30, ask: 'tau' },
+    statement: (p) => `<p>A dipole is made of ±${formatSI(p.q * 1e9, '', { sig: 3 }).trim()} nC charges ${cm(p.d)} apart. It sits in a uniform field of ${f(p.E, 'N/C')}, with its dipole moment at θ = ${p.theta}° to the field.</p><p>Find the net force, the torque, and the potential energy.</p>`,
+    setup: (ctx, p) => ctx.load('dipole', p),
+    steps: [
+      { text: (p) => `Dipole moment: p = qd = ${f(dipoleNumbers(p).p, 'C·m')}.`, act: (ctx) => ctx.show('p') },
+      { text: (p) => `The forces are +qE and −qE: equal (${f(dipoleNumbers(p).F, 'N')}) and opposite, so the net force is zero.`, act: (ctx) => ctx.show('forces') },
+      { text: (p) => `But they do not act along the same line, so they twist it: τ = pE sin θ = ${f(dipoleNumbers(p).tau, 'N·m')}.`, act: (ctx) => ctx.show('torque') },
+      { text: (p) => `Potential energy: U = −pE cos θ = ${f(dipoleNumbers(p).U, 'J')}. It is lowest when the dipole lines up with the field.`, act: (ctx) => ctx.show('release') },
+    ],
+    variation: {
+      make: (rand) => ({ q: pick(rand, [1, 2, 3, 5]) * 1e-9, d: pick(rand, [1, 2, 3, 4]) * 1e-2, E: pick(rand, [1, 2, 5, 8]) * 1e4, theta: pick(rand, [20, 30, 45, 60, 120, 150]), ask: pick(rand, ['tau', 'U']) }),
+      ask: (p) => (p.ask === 'tau' ? 'What is the size of the torque on the dipole?' : 'What is the potential energy U = −pE cos θ? (Include the sign.)'),
+      answer: (ctx, p) => { const n = dipoleNumbers(p); return p.ask === 'tau' ? { value: n.tau, unit: 'N·m' } : { value: n.U, unit: 'J' }; },
+      revisit: (p) => (p.ask === 'tau' ? 2 : 3),
+    },
+  },
+];
+void K;
