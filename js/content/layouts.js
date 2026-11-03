@@ -116,7 +116,7 @@ export function parallelLayout(withR2 = true, sw = false) {
  */
 export function combinationLayout(stage = 0) {
   const L = {
-    w: 100, h: 62, padTop: 44,
+    w: 100, h: 62, padTop: 66,
     elements: { B: { kind: 'battery', a: [8, 54], b: [8, 12], labelAt: [16, 44], labelAlign: 'left' } },
     wires: [], junctions: [], pieces: [P('B')],
   };
@@ -194,7 +194,7 @@ export function twoBatteryLayout() {
       R1: { kind: 'resistor', a: [14, 36], b: [14, 12], labelAt: [5, 24], labelAlign: 'center' },
       R2: { kind: 'resistor', a: [50, 12], b: [50, 56], labelAt: [60, 34], labelAlign: 'left' },
       R3: { kind: 'resistor', a: [86, 12], b: [86, 36], labelAt: [95, 24], labelAlign: 'center' },
-      B2: { kind: 'battery', a: [86, 56], b: [86, 36], labelAt: [95, 46], labelAlign: 'center' },
+      B2: { kind: 'battery', a: [86, 56], b: [86, 36], labelAt: [79, 46], labelAlign: 'right' },
     },
     wires: [
       W('wTL', 't', [['R1', 1]], [14, 12], [50, 12]),
@@ -249,7 +249,7 @@ export function rcExample1Layout() {
     elements: {
       B: { kind: 'battery', a: [12, 50], b: [12, 14], labelAt: [5, 32], labelAlign: 'center' },
       R1: { kind: 'resistor', a: [20, 14], b: [42, 14], labelSide: 1 },
-      S: { kind: 'switch', a: [50, 24], b: [50, 42], labelAt: [56, 33], labelAlign: 'left' },
+      S: { kind: 'switch', a: [50, 24], b: [50, 42], labelAt: [45, 33], labelAlign: 'right' },
       R2: { kind: 'resistor', a: [58, 14], b: [80, 14], labelSide: 1 },
       C: { kind: 'capacitor', a: [90, 26], b: [90, 40], labelAt: [83, 33], labelAlign: 'right' },
     },

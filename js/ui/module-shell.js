@@ -43,7 +43,17 @@ export function moduleShell(root, life, { route, title, question, views, initial
     v.mount(container, viewLife);
   }
 
+  // A soft fade at the edge shows that the tab row scrolls (phones).
+  const fade = () => {
+    const more = tabs.scrollWidth - tabs.clientWidth;
+    tabs.classList.toggle('fade-right', more > 4 && tabs.scrollLeft < more - 4);
+    tabs.classList.toggle('fade-left', more > 4 && tabs.scrollLeft > 4);
+  };
+  life.on(tabs, 'scroll', fade, { passive: true });
+  life.resize(tabs, fade);
+
   show(initial || views[0].id);
+  fade();
   return {
     onRoute(sub) { show(sub ? sub.split('/')[0] : views[0].id); },
     get current() { return currentId; },
@@ -97,4 +107,41 @@ export function placeResponsive(el, { wideParent, wideAfter = null, narrowParent
   };
   place();
   if (mql) life.on(mql, 'change', place);
+}
+
+/**
+ * On phones, pin a control card to the bottom of the screen (collapsible), so she can drag a slider
+ * and watch the picture at the same time. On wide screens the card stays in the control column.
+ */
+export function dockOnPhone(card, life) {
+  const mql = typeof matchMedia === 'function' ? matchMedia('(max-width: 959px)') : null;
+  if (!mql) return;
+  const title = card.querySelector('h3');
+  const state = h('span', { class: 'dock-state' }, 'Hide');
+  const handle = h('button', { type: 'button', class: 'dock-handle', 'aria-expanded': 'true' },
+    h('span', { class: 'dock-title' }, title ? title.textContent : 'Controls'), state);
+  card.insertBefore(handle, card.firstChild);
+  const setPad = () => {
+    if (card.classList.contains('docked')) document.body.style.setProperty('--dock-h', `${card.offsetHeight}px`);
+  };
+  const apply = () => {
+    const on = mql.matches;
+    card.classList.toggle('docked', on);
+    document.body.classList.toggle('has-dock', on);
+    if (on) setPad(); else document.body.style.removeProperty('--dock-h');
+  };
+  handle.addEventListener('click', () => {
+    const collapsed = card.classList.toggle('collapsed');
+    handle.setAttribute('aria-expanded', String(!collapsed));
+    state.textContent = collapsed ? 'Show' : 'Hide';
+    setPad();
+  });
+  life.resize(card, setPad);
+  apply();
+  life.on(mql, 'change', apply);
+  life.add(() => {
+    card.classList.remove('docked');
+    document.body.classList.remove('has-dock');
+    document.body.style.removeProperty('--dock-h');
+  });
 }

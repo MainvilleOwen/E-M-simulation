@@ -333,7 +333,9 @@ function drawBulb(ctx, g, unit, ww, ca, cb, P, pRef) {
   }
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = `rgba(255,${Math.round(190 + 40 * b)},${Math.round(90 + 60 * b)},${0.12 + 0.88 * b})`;
+  // Glass colour runs from grey (off) to warm white (full power), linear in power.
+  const mix = (a0, a1) => Math.round(a0 + (a1 - a0) * b);
+  ctx.fillStyle = `rgb(${mix(70, 255)},${mix(80, 236)},${mix(100, 170)})`;
   ctx.fill();
   ctx.strokeStyle = '#c8d0e0';
   ctx.lineWidth = 2;

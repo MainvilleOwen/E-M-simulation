@@ -14,6 +14,7 @@ export function contentBox(layout) {
   const add = (p) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
   for (const el of Object.values(layout.elements || {})) { add(el.a); add(el.b); if (el.labelAt) add(el.labelAt); }
   for (const w of layout.wires || []) for (const p of w.pts) add(p);
+  for (const p of layout.island || []) add(p);
   if (!Number.isFinite(x0)) return { x: 0, y: 0, w: layout.w || 100, h: layout.h || 60 };
   return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
 }
@@ -55,22 +56,25 @@ export class CircuitView {
     this.box = o.box || contentBox(o.layout);
     const aspect = o.aspect || Math.min(0.85, Math.max(0.42, (this.box.h / this.box.w) * 0.92 + 0.1));
     this.schem = new Stage(this.el, life, {
-      aspect, minHeight: o.minHeight || 170, maxHeight: o.maxHeight || 420,
+      aspect, minHeight: o.minHeight || 170, maxHeight: o.maxHeight || 250,
       label: o.label || 'Circuit schematic with moving charge dots', className: 'stage-schematic',
     });
+    // One compact row: the potential legend and the height-map caption (each has a 44 px ⓘ button).
+    const meta = h('div', { class: 'cv-meta' });
+    this.el.appendChild(meta);
     this.legend = null;
     if (o.legend !== false) {
       this.legend = potentialLegend(this.scales.vMin, this.scales.vMax);
-      this.el.appendChild(this.legend.el);
+      meta.appendChild(this.legend.el);
     }
     this.hm = null;
     if (o.heightMap !== false) {
       this.hmCaption = h('div', { class: 'hm-caption' },
-        h('span', {}, 'Height map: potential around the loop'),
-        infoNote('Height = potential. The battery is a lift that raises charge by ε. Wires are flat. Each resistor is a downhill ramp with a drop of IR. A capacitor is a step of height q/C.', { label: 'About the height map' }));
-      this.el.appendChild(this.hmCaption);
+        h('span', {}, 'Height map below'),
+        infoNote('The height map is the potential around the loop. Height = potential. The battery is a lift that raises charge by ε. Wires are flat. Each resistor is a downhill ramp with a drop of IR. A capacitor is a step of height q/C. The same dots ride along it.', { label: 'About the height map' }));
+      meta.appendChild(this.hmCaption);
       this.hm = new Stage(this.el, life, {
-        aspect: o.hmAspect || 0.4, minHeight: o.hmMin || 130, maxHeight: o.hmMax || 210,
+        aspect: o.hmAspect || 0.4, minHeight: o.hmMin || 130, maxHeight: o.hmMax || 170,
         label: 'Height map: potential around the loop', className: 'stage-heightmap',
       });
     }

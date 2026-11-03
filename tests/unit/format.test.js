@@ -15,6 +15,17 @@ describe('formatSI (SI prefixes, 3 significant figures)', () => {
     expect(formatSI(0.0576, 'J')).toBe(`57.6${T}mJ`);
     expect(formatSI(120, 'V')).toBe(`120${T}V`);
   });
+  it('never puts a prefix on squared or cubed units', () => {
+    expect(formatSI(0.5, 'm²')).toBe(`0.500${T}m²`);
+    expect(formatSI(2, 'm²')).toBe(`2.00${T}m²`);
+    expect(formatSI(8.2e-7, 'm²')).toBe(`8.20×10⁻⁷${T}m²`);
+    expect(formatSI(1.13e8, 'm²')).toBe(`1.13×10⁸${T}m²`);
+    expect(formatSI(100, 'J/m³')).toBe(`100${T}J/m³`);
+  });
+  it('writes small resistances plainly and tiny values in scientific notation', () => {
+    expect(formatSI(0.5, 'Ω')).toBe(`0.500${T}Ω`);
+    expect(formatSI(1.22e-23, 'J')).toBe(`1.22×10⁻²³${T}J`);
+  });
   it('handles rounding across prefix boundaries', () => {
     expect(formatSI(0.9996, 'A')).toBe(`1.00${T}A`);
     expect(formatSI(999.6, 'A')).toBe(`1.00${T}kA`);
@@ -47,11 +58,24 @@ describe('parseAnswer and tolerance', () => {
     expect(parseAnswer('3.54 nF', 'F')).toBeCloseTo(3.54e-9, 18);
     expect(parseAnswer('abc', 'A')).toBeNaN();
     expect(parseAnswer('', 'A')).toBeNaN();
+    expect(parseAnswer('2,50e+3', 'W')).toBe(2500);
+    expect(parseAnswer('2,5', 'A')).toBe(2.5);
+    expect(parseAnswer('2,500', 'W')).toBe(2500);
+    expect(parseAnswer('1,250.5', 'W')).toBe(1250.5);
   });
   it('accepts within 2%', () => {
     expect(withinTolerance(1.02, 1.0)).toBe(true);
     expect(withinTolerance(1.021, 1.0)).toBe(false);
     expect(withinTolerance(-0.99, -1.0)).toBe(true);
     expect(withinTolerance(NaN, 1)).toBe(false);
+  });
+});
+
+import { formatSame } from '../../js/core/format.js';
+describe('formatSame', () => {
+  it('uses one prefix for every value in an equation', () => {
+    expect(formatSame([2.1818, -0.2727, 1.909], 'A')).toEqual(['2.18 A', '-0.27 A', '1.91 A']);
+    expect(formatSame([0.6, 0.4, 0.2], 'A')).toEqual(['600 mA', '400 mA', '200 mA']);
+    expect(formatSame([12, 0.6], 'A')).toEqual(['12.0 A', '0.6 A']);
   });
 });

@@ -1,6 +1,6 @@
 // M1. Circuits: series, parallel, and why.
 import { h, infoNote } from '../ui/dom.js';
-import { moduleShell, viewBody, ctrlCard, placePredict } from '../ui/module-shell.js';
+import { moduleShell, viewBody, ctrlCard, placePredict, dockOnPhone } from '../ui/module-shell.js';
 import { CircuitView, bindLayout } from '../ui/circuit-view.js';
 import { slider, segmented, readouts, equationReveal, linkSymbols } from '../ui/controls.js';
 import { compareLayout } from '../ui/compare.js';
@@ -10,7 +10,7 @@ import { StageAnimator } from '../ui/reduce.js';
 import { LoopWalker, loopPieces } from '../ui/loop-walk.js';
 import { pieceInfo } from '../ui/heightmap.js';
 import { solveDC } from '../core/circuit.js';
-import { formatSI, formatSigned } from '../core/format.js';
+import { formatSI, formatSigned, formatSame } from '../core/format.js';
 import {
   RANGES, oneResistor, seriesCircuit, parallelCircuit, combinationCircuit, bulbCircuit, twoBatteryCircuit,
 } from '../content/presets.js';
@@ -70,7 +70,7 @@ function mountOne(container, life) {
   const eq = equationReveal(
     '<span class="sym" data-sym="I"><i>I</i></span> = <span class="sym" data-sym="emf">ε</span> / <span class="sym" data-sym="R"><i>R</i></span>',
     { note: 'Tap a symbol to find its slider or readout.' });
-  ctrlCard(ctrl, 'Change it', sR.el);
+  dockOnPhone(ctrlCard(ctrl, 'Change it', sR.el), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el, why, eq.el);
   function update() {
     const circuit = oneResistor(EMF, R);
@@ -192,7 +192,7 @@ function renderSingle(host, life, cfg, params) {
   const ro = readouts(cfg.readoutsB);
   const why = whyNote();
   const eq = equationReveal(cfg.equation);
-  ctrlCard(ctrl, 'Change it', ...sliderPair(params, update).map((s) => s.el));
+  dockOnPhone(ctrlCard(ctrl, 'Change it', ...sliderPair(params, update).map((s) => s.el)), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el, why, eq.el);
   let sol = null;
   function update() {
@@ -233,7 +233,7 @@ function renderCompare(host, life, cfg, params) {
   const items = cfg.readoutsA.concat(cfg.readoutsB.map((r) => ({ ...r, label: /^B:/.test(r.label) ? r.label : `B: ${r.label}` })));
   const ro = readouts(items);
   const why = whyNote();
-  ctrlCard(ctrl, 'Change it (both circuits)', ...sliderPair(params, update).map((s) => s.el));
+  dockOnPhone(ctrlCard(ctrl, 'Change it (both circuits)', ...sliderPair(params, update).map((s) => s.el)), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el, why, equationReveal(cfg.equation).el);
   placePredict(card.el, sim, ctrl, life);
   let solA = null;
@@ -281,8 +281,10 @@ function junctionBox(parent) {
     reset() { q = [0, 0, 0]; },
     tick(dt, Iin, I1, I2) {
       q = [q[0] + Iin * dt, q[1] + I1 * dt, q[2] + I2 * dt];
-      const t1 = `Current: in ${f(Iin, 'A')} = out ${f(I1, 'A')} + ${f(I2, 'A')}`;
-      const t2 = `Charge so far: in ${f(q[0], 'C')} = out ${f(q[1], 'C')} + ${f(q[2], 'C')}`;
+      const [a, b, c] = formatSame([Iin, I1, I2], 'A');
+      const [qa, qb, qc] = formatSame(q, 'C');
+      const t1 = `Current: in ${a} = out ${b} + ${c}`;
+      const t2 = `Charge so far: in ${qa} = out ${qb} + ${qc}`;
       if (line1.textContent !== t1) line1.textContent = t1;
       if (line2.textContent !== t2) line2.textContent = t2;
     },
@@ -302,13 +304,13 @@ function comboLabels(p) {
     const cur = (id) => (sol && sol.ok ? f(sol.I[id], 'A') : '');
     put('B', f(p.emf, 'V'), 'ε');
     if (stage === 0) {
-      put('Ra', f(p.Ra, 'Ω'), 'a'); put('Rb', f(p.Rb, 'Ω'), 'b');
-      put('Rc', [f(p.Rc, 'Ω'), cur('Rc')], 'c'); put('Rd', [f(p.Rd, 'Ω'), cur('Rd')], 'd');
+      put('Ra', `R₁ = ${f(p.Ra, 'Ω')}`, 'R₁'); put('Rb', `R₂ = ${f(p.Rb, 'Ω')}`, 'R₂');
+      put('Rc', [`R₃ = ${f(p.Rc, 'Ω')}`, cur('Rc')], 'R₃'); put('Rd', [`R₄ = ${f(p.Rd, 'Ω')}`, cur('Rd')], 'R₄ (rings)');
     } else {
-      if (stage <= 2) put('Rab', f(p.Ra + p.Rb, 'Ω'), 'a+b');
-      if (stage === 1) { put('Rc', f(p.Rc, 'Ω'), 'c'); put('Rd', f(p.Rd, 'Ω'), 'd'); }
-      if (stage === 2) put('Rcd', f((p.Rc * p.Rd) / (p.Rc + p.Rd), 'Ω'), 'c∥d');
-      if (stage === 3) put('Req', `R_eq = ${f(p.Ra + p.Rb + (p.Rc * p.Rd) / (p.Rc + p.Rd), 'Ω')}`.replace('R_eq', 'Req'), 'all');
+      if (stage <= 2) put('Rab', `R₁₂ = ${f(p.Ra + p.Rb, 'Ω')}`, 'R₁₂');
+      if (stage === 1) { put('Rc', `R₃ = ${f(p.Rc, 'Ω')}`, 'R₃'); put('Rd', `R₄ = ${f(p.Rd, 'Ω')}`, 'R₄'); }
+      if (stage === 2) put('Rcd', `R₃₄ = ${f((p.Rc * p.Rd) / (p.Rc + p.Rd), 'Ω')}`, 'R₃₄');
+      if (stage === 3) put('Req', `Req = ${f(p.Ra + p.Rb + (p.Rc * p.Rd) / (p.Rc + p.Rd), 'Ω')}`, 'Req');
     }
     return { labels: L, hmLabels: H };
   };
@@ -331,12 +333,12 @@ function mountCombination(container, life) {
   const n = combinationNumbers(p);
   const steps = [
     { stage: 0, text: 'Four resistors. Press <strong>Next step</strong> to reduce the circuit one group at a time. Watch the dots leaving the battery: their speed never changes.' },
-    { stage: 1, group: ['Ra', 'Rb'], text: `R<sub>a</sub> and R<sub>b</sub> carry the same current (nothing branches off between them), so they are in series: ${p.Ra} Ω + ${p.Rb} Ω = <strong>${f(n.Rab, 'Ω')}</strong>.` },
-    { stage: 2, group: ['Rc', 'Rd'], text: `R<sub>c</sub> and R<sub>d</sub> share the same top and bottom heights, so they are in parallel: (1/${p.Rc} + 1/${p.Rd})<sup>−1</sup> = <strong>${f(n.Rcd, 'Ω')}</strong>.` },
-    { stage: 3, group: ['Rab', 'Rcd'], text: `${f(n.Rab, 'Ω')} and ${f(n.Rcd, 'Ω')} in series: <strong>R<sub>eq</sub> = ${f(n.Req, 'Ω')}</strong>.` },
+    { stage: 1, group: ['Ra', 'Rb'], text: `R<sub>1</sub> and R<sub>2</sub> carry the same current (nothing branches off between them), so they are in series: R<sub>12</sub> = ${p.Ra} Ω + ${p.Rb} Ω = <strong>${f(n.Rab, 'Ω')}</strong>.` },
+    { stage: 2, group: ['Rc', 'Rd'], text: `R<sub>3</sub> and R<sub>4</sub> share the same top and bottom heights, so they are in parallel: R<sub>34</sub> = (1/${p.Rc} Ω + 1/${p.Rd} Ω)<sup>−1</sup> = <strong>${f(n.Rcd, 'Ω')}</strong>.` },
+    { stage: 3, group: ['Rab', 'Rcd'], text: `R<sub>12</sub> and R<sub>34</sub> are in series: <strong>R<sub>eq</sub> = ${f(n.Rab, 'Ω')} + ${f(n.Rcd, 'Ω')} = ${f(n.Req, 'Ω')}</strong>.` },
     { stage: 3, after: ['wA', 'wB'], text: `Total current: I = ${f(p.emf, 'V')} / ${f(n.Req, 'Ω')} = <strong>${f(n.I, 'A')}</strong>. The same current flowed at every stage.` },
-    { stage: 2, after: ['Rcd', 'Rab'], text: `Expand one level: the ${f(n.Rcd, 'Ω')} block drops ${f(n.I, 'A')} × ${f(n.Rcd, 'Ω')} = <strong>${f(n.Vcd, 'V')}</strong>; the ${f(n.Rab, 'Ω')} block drops ${f(n.Vab, 'V')}.` },
-    { stage: 0, after: ['Rc', 'Rd'], text: `Both parallel branches feel the same ${f(n.Vcd, 'V')} drop: I<sub>c</sub> = ${f(n.Vcd, 'V')} / ${p.Rc} Ω = <strong>${f(n.Ic, 'A')}</strong>, I<sub>d</sub> = ${f(n.Vcd, 'V')} / ${p.Rd} Ω = <strong>${f(n.Id, 'A')}</strong>. They add to ${f(n.I, 'A')}.` },
+    { stage: 2, after: ['Rcd', 'Rab'], text: `Expand one level: R<sub>34</sub> drops I × R<sub>34</sub> = ${f(n.I, 'A')} × ${f(n.Rcd, 'Ω')} = <strong>${f(n.Vcd, 'V')}</strong>; R<sub>12</sub> drops ${f(n.Vab, 'V')}.` },
+    { stage: 0, after: ['Rc', 'Rd'], text: `R<sub>3</sub> and R<sub>4</sub> both feel the same ${f(n.Vcd, 'V')} drop: I<sub>3</sub> = ${f(n.Vcd, 'V')} / ${p.Rc} Ω = <strong>${f(n.Ic, 'A')}</strong>, I<sub>4</sub> = ${f(n.Vcd, 'V')} / ${p.Rd} Ω = <strong>${f(n.Id, 'A')}</strong>. They add to ${f(n.I, 'A')}.` },
   ];
   let k = 0;
   const stepText = h('p', { class: 'reduce-text', 'aria-live': 'polite' });
@@ -348,9 +350,9 @@ function mountCombination(container, life) {
     { key: 'I', label: 'Battery current', unit: 'A' },
     { key: 'Req', label: '<i>R</i><sub>eq</sub> = ε / I', unit: 'Ω' },
   ]);
-  ctrlCard(ctrl, 'Reduce step by step', stepText, h('div', { class: 'btn-row' }, back, next, reset), counter);
+  dockOnPhone(ctrlCard(ctrl, 'Reduce step by step', h('div', { class: 'btn-row' }, back, next, reset), stepText, counter), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el,
-    h('p', { class: 'note' }, 'Arrows show each resistor’s push (its voltage drop). Ring dots ride the lower lane.'));
+    h('p', { class: 'note' }, 'Pink arrows show each resistor’s push (its voltage drop). Dots drawn as rings travel in the lower branch.'));
   function render() {
     stepText.innerHTML = steps[k].text;
     counter.textContent = `Step ${k} of ${steps.length - 1}`;
@@ -381,7 +383,7 @@ function mountCombination(container, life) {
 // Bulbs
 // ---------------------------------------------------------------------------
 const BULB_R = 6;
-const bulbScales = () => ({ vMin: 0, vMax: EMF, dotK: 14, vmax: 60, pushPerVolt: 1.4, pRef: 30 });
+const bulbScales = () => ({ vMin: 0, vMax: EMF, dotK: 14, vmax: 60, pushPerVolt: 1.4, pRef: 24 });
 
 function mountBulbs(container, life) {
   container.appendChild(h('p', { class: 'view-intro', html: 'Bulb brightness is proportional to power, P = I<sup>2</sup>R. The bulbs are identical (6 Ω each) on a 12 V battery.' }));
@@ -532,7 +534,7 @@ function mountKirchhoff(container, life) {
     { key: 'I3', label: 'I<sub>3</sub> (as guessed)', unit: 'A', sym: 'I3' },
   ]);
   const optCard = ctrlCard(ctrl, 'Set up', circSeg.el, loopSeg.el, guessSeg.el);
-  ctrlCard(ctrl, 'Walk', h('div', { class: 'btn-row' }, walkBtn, stepBtn, resetBtn), sumNow, terms);
+  dockOnPhone(ctrlCard(ctrl, 'Walk', h('div', { class: 'btn-row' }, walkBtn, stepBtn, resetBtn), sumNow, terms), life);
   const kclCard = ctrlCard(ctrl, 'Junction rule at the top node', kcl, ro.el,
     h('p', { class: 'note' }, 'Why Kirchhoff here? No two resistors are simply in series or in parallel (the batteries sit inside the branches), so the reduce-step-by-step method cannot start.'));
   void optCard;
@@ -563,8 +565,8 @@ function mountKirchhoff(container, life) {
     view.setSolution(sol);
     assume = two ? kirchhoffAssumptions(state.guessUp) : { R1: { name: 'I', dir: 1 }, R2: { name: 'I', dir: 1 } };
     const labels = two
-      ? { B1: '12 V', B2: '6 V', R1: '2 Ω', R2: '4 Ω', R3: '6 Ω' }
-      : { B: '12 V', R1: 'R₁ = 3.00 Ω', R2: 'R₂ = 6.00 Ω' };
+      ? { B1: ['ε₁', '12 V'], B2: ['ε₂', '6 V'], R1: ['R₁', '2 Ω'], R2: ['R₂', '4 Ω'], R3: ['R₃', '6 Ω'] }
+      : { B: 'ε = 12 V', R1: 'R₁ = 3.00 Ω', R2: 'R₂ = 6.00 Ω' };
     const hmLabels = two ? { B1: 'ε₁', B2: 'ε₂', R1: 'R₁', R2: 'R₂', R3: 'R₃' } : { B: 'ε', R1: 'R₁', R2: 'R₂' };
     view.set({
       labels, hmLabels,
@@ -580,13 +582,15 @@ function mountKirchhoff(container, life) {
       const n = twoBatteryNumbers(KB);
       const I3 = assume.R3.dir * sol.I.R3;
       ro.set('V', n.V); ro.set('I1', sol.I.R1); ro.set('I2', sol.I.R2); ro.set('I3', I3);
+      const [i1, i2, i3] = formatSame([sol.I.R1, sol.I.R2, I3], 'A');
       const eqn = state.guessUp
-        ? `Your guesses: I<sub>1</sub> + I<sub>3</sub> = I<sub>2</sub> → ${f(sol.I.R1, 'A')} + (${f(I3, 'A')}) = ${f(sol.I.R2, 'A')}.`
-        : `Your guesses: I<sub>1</sub> = I<sub>2</sub> + I<sub>3</sub> → ${f(sol.I.R1, 'A')} = ${f(sol.I.R2, 'A')} + ${f(I3, 'A')}.`;
+        ? `Your guesses: I<sub>1</sub> + I<sub>3</sub> = I<sub>2</sub> → ${i1} + (${i3}) = ${i2}.`
+        : `Your guesses: I<sub>1</sub> = I<sub>2</sub> + I<sub>3</sub> → ${i1} = ${i2} + ${i3}.`;
       const sign = I3 < 0
         ? `I<sub>3</sub> came out <strong>negative</strong>: the real current flows the other way (watch the dots), and the size, ${f(Math.abs(I3), 'A')}, is still right.`
         : 'I<sub>3</sub> came out positive: the guess matches the real direction.';
-      kcl.innerHTML = `<p>Real flow: into the top node ${f(sol.I.R1, 'A')} from the left; out ${f(sol.I.R2, 'A')} down the middle and ${f(sol.I.R3, 'A')} down the right branch, into the 6 V battery’s + terminal (it is being charged).</p><p>${eqn}</p><p>${sign}</p>`;
+      const [r1, r2, r3] = formatSame([sol.I.R1, sol.I.R2, sol.I.R3], 'A');
+      kcl.innerHTML = `<p>Real flow: into the top node ${r1} from the left; out ${r2} down the middle and ${r3} down the right branch, into the 6 V battery’s + terminal (it is being charged).</p><p>${eqn}</p><p>${sign}</p>`;
     }
     updateSum();
   }
@@ -614,7 +618,8 @@ function mountKirchhoff(container, life) {
     const Iass = a.dir * sol.I[id];
     const along = (rev ? -1 : 1) === a.dir;
     const rName = { R1: 'R₁', R2: 'R₂', R3: 'R₃' }[id] || id;
-    return `${along ? '−' : '+'}${a.name}${rName} = ${along ? '−' : '+'}(${f(Iass, 'A')})(${f(ref.R, 'Ω')}) = ${formatSigned(dV, 'V')} <span class="muted">(${along ? 'walking with' : 'walking against'} ${a.name})</span>`;
+    const amps = `${Number(Iass.toPrecision(3))} A`.replace('-', '−');
+    return `${along ? '−' : '+'}${a.name}${rName} = ${along ? '−' : '+'}(${amps})(${Number(ref.R.toPrecision(3))} Ω) = ${formatSigned(dV, 'V')} <span class="muted">(${along ? 'walking with' : 'walking against'} ${a.name})</span>`;
   }
 
   function updateSum() {
@@ -710,7 +715,7 @@ function makeSolveCtx(sim, life) {
         sol = solveDC(c);
         view.setSolution(sol);
         view.set({
-          labels: { B1: `${p.E1} V`, B2: `${p.E2} V`, R1: `${p.R1} Ω`, R2: `${p.R2} Ω`, R3: `${p.R3} Ω` },
+          labels: { B1: ['ε₁', `${p.E1} V`], B2: ['ε₂', `${p.E2} V`], R1: ['R₁', `${p.R1} Ω`], R2: ['R₂', `${p.R2} Ω`], R3: ['R₃', `${p.R3} Ω`] },
           hmLabels: { B1: 'ε₁', B2: '', R1: 'R₁', R2: 'R₂' },
         });
       } else {
@@ -731,7 +736,8 @@ function makeSolveCtx(sim, life) {
     showJunction(on) {
       if (kind !== 'kirchhoff' || !sol || !sol.ok) return;
       junction.hidden = !on;
-      junction.textContent = `Top node: in ${f(sol.I.R1, 'A')} (left) = out ${f(sol.I.R2, 'A')} (middle) + ${f(sol.I.R3, 'A')} (right, downward).`;
+      const [j1, j2, j3] = formatSame([sol.I.R1, sol.I.R2, sol.I.R3], 'A');
+      junction.textContent = `Top node: in ${j1} (left) = out ${j2} (middle) + ${j3} (right, downward).`;
       view.set({ highlight: new Set(['wTL', 'wTR']) });
     },
     showAssumed(on) {

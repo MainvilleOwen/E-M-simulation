@@ -1,6 +1,6 @@
 // M4. Fields and dipoles (lightweight): superposition sandbox and a dipole in a uniform field.
 import { h, infoNote } from '../ui/dom.js';
-import { moduleShell, viewBody, ctrlCard } from '../ui/module-shell.js';
+import { moduleShell, viewBody, ctrlCard, dockOnPhone } from '../ui/module-shell.js';
 import { slider, segmented, readouts, equationReveal, linkSymbols } from '../ui/controls.js';
 import { solveRunner } from '../ui/solve-runner.js';
 import { Stage } from '../ui/stage.js';
@@ -14,7 +14,8 @@ import { FIELD_PROBLEMS } from '../content/problems.js';
 
 const f = formatSI;
 const nC = 1e-9;
-const SOFT = 0.003;               // m: softening near point charges (no infinities)
+const SOFT = 0.003;               // m: softening for the display grid near point charges (no infinities)
+const PROBE_SOFT = 0.0002;        // m: probe readouts are kq/r² to within 0.3% beyond 5 mm
 const ARROW_SCALE = { minMag: 300, maxMag: 3e5 };
 
 export function mount(root, life, sub) {
@@ -177,8 +178,8 @@ export class FieldCanvas {
     if (this.s.probe) {
       const p = this.s.probe;
       const [px, py] = this.px(p.x, p.y);
-      const parts = fieldContributions(charges, p.x, p.y, SOFT);
-      const E = fieldAt(charges, p.x, p.y, SOFT);
+      const parts = fieldContributions(charges, p.x, p.y, PROBE_SOFT);
+      const E = fieldAt(charges, p.x, p.y, PROBE_SOFT);
       const mags = parts.map((e) => Math.hypot(e.Ex, e.Ey)).concat([Math.hypot(E.Ex, E.Ey)]);
       const maxL = Math.min(W, H) * 0.24;
       const k = maxL / Math.max(...mags, 1e-30);
@@ -241,7 +242,8 @@ function attachDrag(fc, life, onChange) {
   const move = (ev) => {
     if (!drag) return;
     const { x, y } = fc.stage.local(ev);
-    const [wx, wy] = fc.world(Math.max(8, Math.min(fc.stage.w - 8, x)), Math.max(8, Math.min(fc.stage.h - 8, y)));
+    const m = drag.kind === 'charge' ? 26 : 10; // keep charges (and their labels) on the canvas
+    const [wx, wy] = fc.world(Math.max(m, Math.min(fc.stage.w - m, x)), Math.max(m, Math.min(fc.stage.h - m - (drag.kind === 'charge' ? 14 : 0), y)));
     if (drag.kind === 'charge') { fc.s.charges[drag.i].x = wx; fc.s.charges[drag.i].y = wy; fc.invalidate(); } else { fc.s.probe.x = wx; fc.s.probe.y = wy; fc.dirty = true; }
     onChange(drag.kind);
   };
@@ -326,7 +328,7 @@ function mountSandbox(container, life) {
     state.charges.forEach((c, i) => {
       const signSeg = segmented({
         label: `q${sub[i]}`, value: c.q > 0 ? '+' : '-', small: true,
-        options: [{ value: '+', label: '+' }, { value: '-', label: '−' }],
+        options: [{ value: '+', label: 'positive' }, { value: '-', label: 'negative' }],
         onChange: (v) => { c.q = (v === '+' ? 1 : -1) * Math.abs(c.q); fc.invalidate(); update(); },
       });
       const mag = slider({ label: `|q${sub[i]}|`, min: 0.5, max: 5, step: 0.5, value: Math.abs(c.q) / nC, format: (v) => `${formatNum(v, 2)} nC`, onInput: (v) => { c.q = Math.sign(c.q) * v * nC; fc.invalidate(); update(); } });
@@ -341,12 +343,13 @@ function mountSandbox(container, life) {
 
   function update() {
     const p = state.probe;
-    const E = fieldAt(state.charges, p.x, p.y, SOFT);
+    const E = fieldAt(state.charges, p.x, p.y, PROBE_SOFT);
     const m = Math.hypot(E.Ex, E.Ey);
     ro.set('E', m);
     ro.set('dir', (Math.atan2(E.Ey, E.Ex) * 180) / Math.PI);
-    ro.set('V', potentialAt(state.charges, p.x, p.y, SOFT));
-    const contrib = fieldContributions(state.charges, p.x, p.y, SOFT);
+    ro.set('V', potentialAt(state.charges, p.x, p.y, PROBE_SOFT));
+    const contrib = fieldContributions(state.charges, p.x, p.y, PROBE_SOFT);
+    const nearest = Math.min(...state.charges.map((c) => Math.hypot(p.x - c.x, p.y - c.y)));
     parts.replaceChildren(...contrib.map((e, i) => h('li', {}, `From q${'₁₂₃₄'[i]}: ${f(Math.hypot(e.Ex, e.Ey), 'N/C')}`)));
     const sumMags = contrib.reduce((s, e) => s + Math.hypot(e.Ex, e.Ey), 0);
     let text = `The white arrow is the vector sum. Its size (${f(m, 'N/C')}) is ${m < 0.98 * sumMags ? 'less than' : 'equal to'} the sum of the sizes (${f(sumMags, 'N/C')}) because the arrows ${m < 0.98 * sumMags ? 'point in different directions' : 'line up'}.`;
@@ -357,9 +360,13 @@ function mountSandbox(container, life) {
       const rx = p.x - mx; const ry = p.y - my;
       const along = Math.abs((rx * ax + ry * ay) / L);
       const across = Math.abs((rx * -ay + ry * ax) / L);
-      if (across < 0.002) text = 'On the axis, both fields line up along the axis: the field points along the dipole (from − toward +, beyond the + end).';
-      else if (along < 0.002) text = 'On the perpendicular bisector, the sideways parts cancel and the field points parallel to the axis, opposite the dipole moment (from + toward −).';
+      if (across < 0.002) {
+        text = along < L / 2
+          ? 'On the axis between the charges, both fields point the same way, from + toward −. Here the field points opposite the dipole moment p (which points from − to +).'
+          : 'On the axis beyond either end, the nearer charge wins and the field points along the dipole moment p (from the − side toward the + side).';
+      } else if (along < 0.002) text = 'On the perpendicular bisector, the sideways parts cancel and the field points parallel to the axis, opposite the dipole moment (from + toward −).';
     }
+    if (nearest < 0.004) text += ' The probe is inside a charge’s marker. A real point charge has no size, so its field keeps growing as you get closer; the sim caps it very close in.';
     if (why.innerHTML !== text) why.innerHTML = text;
     fc.dirty = true;
   }
@@ -416,7 +423,7 @@ export class DipoleCanvas {
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + L * 1.25, cy); ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy, L * 0.45, 0, -wrapAngle(th), wrapAngle(th) > 0); ctx.stroke();
-    label(ctx, `θ = ${formatNum(Math.abs((wrapAngle(th) * 180) / Math.PI), 3)}°`, cx + L * 0.55, cy - (wrapAngle(th) > 0 ? 16 : -16), { size: 13, color: '#f0e442', align: 'left' });
+    label(ctx, `θ = ${Math.abs((wrapAngle(th) * 180) / Math.PI).toFixed(1)}°`, cx + L * 0.55, cy - (wrapAngle(th) > 0 ? 16 : -16), { size: 13, color: '#f0e442', align: 'left' });
     // p arrow
     if (show.p) {
       arrow(ctx, cx - L * 0.5 * Math.cos(th), cy + L * 0.5 * Math.sin(th), cx + L * 0.5 * Math.cos(th), cy - L * 0.5 * Math.sin(th), { color: '#f0e442', width: 2.5, head: 9 });
@@ -480,7 +487,7 @@ function mountDipole(container, life) {
     infoNote('The dipole’s rotational inertia is chosen so one swing takes about 2.5 s at the default settings. The forces, torque and energy are computed from the real charges and field.', { label: 'About the motion' })));
   const dc = new DipoleCanvas(stage, s);
   const ro = readouts([
-    { key: 'theta', label: 'Angle θ', format: (v) => `${formatNum(v, 3)}°`, sym: 'theta' },
+    { key: 'theta', label: 'Angle θ', format: (v) => `${v.toFixed(1)}°`, sym: 'theta' },
     { key: 'net', label: 'Net force', unit: 'N' },
     { key: 'tau', label: 'Torque τ = pE sin θ', unit: 'N·m', sym: 'tau' },
     { key: 'U', label: 'U = −pE cos θ', unit: 'J', sym: 'U' },
@@ -501,6 +508,7 @@ function mountDipole(container, life) {
   releaseBtn.addEventListener('click', () => { s.theta = (150 * Math.PI) / 180; s.omega = 0; s.playing = true; });
   const eq = equationReveal('<span class="sym" data-sym="tau">τ</span> = <i>pE</i> sin <span class="sym" data-sym="theta">θ</span>, &nbsp; <span class="sym" data-sym="U"><i>U</i></span> = −<i>pE</i> cos <span class="sym" data-sym="theta">θ</span>, &nbsp; <i>p</i> = <span class="sym" data-sym="q"><i>q</i></span><i>d</i>');
   const changeCard = ctrlCard(ctrl, 'Change it', releaseBtn, sE.el, sQ.el, sZ.el);
+  dockOnPhone(changeCard, life);
   const measure = h('section', { class: 'ctrl-card' }, h('h3', {}, 'What the sim measures'), ro.el,
     bar, why, eq.el);
   sim.appendChild(measure);
@@ -537,17 +545,19 @@ function mountDipole(container, life) {
     const thDeg = (wrapAngle(s.theta) * 180) / Math.PI;
     const U = dipoleEnergy(p, s.E, s.theta);
     const Kin = 0.5 * INERTIA * s.omega * s.omega;
+    const pE = p * s.E;
+    const snap = (v) => (Math.abs(v) < 1e-6 * pE ? 0 : v); // round-off near 0° and 90° is not physics
     ro.set('theta', Math.abs(thDeg));
     ro.set('net', Math.hypot(fz.net.x, fz.net.y));
-    ro.set('tau', Math.abs(fz.torque));
-    ro.set('U', U);
-    const pE = p * s.E;
+    ro.set('tau', snap(Math.abs(fz.torque)));
+    ro.set('U', snap(U));
     const uf = Math.max(-1, Math.min(1, U / pE));
     uFill.style.left = `${50 + Math.min(0, uf) * 50}%`;
     uFill.style.width = `${Math.abs(uf) * 50}%`;
     kFill.style.width = `${Math.max(0, Math.min(1, Kin / (2 * pE))) * 100}%`;
     uVal.textContent = f(U, 'J');
-    kVal.textContent = f(Kin, 'J');
+    kVal.textContent = f(snap(Kin), 'J');
+    uVal.textContent = f(snap(U), 'J');
     const aligned = Math.abs(thDeg) < 2 && Math.abs(s.omega) < 0.05;
     const text = aligned
       ? 'Lined up with the field: the forces act along the same line, so the torque is zero and U = −pE is as low as it gets. This is a stable equilibrium.'

@@ -13,7 +13,9 @@ export function buildTracks(layout) {
   }
   for (const [id, el] of Object.entries(layout.elements || {})) {
     if (el.kind === 'capacitor' || el.noDots) continue;
-    tracks.push({ id, pts: [el.a, el.b], flow: el.flow || [[id, 1]] });
+    // An open switch has a gap: no charge sits inside it.
+    const isOpen = el.kind === 'switch' ? () => !(el.ref && el.ref.closed) : null;
+    tracks.push({ id, pts: [el.a, el.b], flow: el.flow || [[id, 1]], isOpen });
   }
   for (const t of tracks) {
     const cum = [0];
@@ -101,7 +103,7 @@ export class DotSystem {
   /** Call cb(f, [x, y]) for each dot on a track; f is the fraction along the track (0..1). */
   eachDot(id, cb) {
     const t = this.byId.get(id);
-    if (!t || t.n === 0) return;
+    if (!t || t.n === 0 || (t.isOpen && t.isOpen())) return;
     for (let j = 0; j < t.n; j++) {
       const s = t.phase + j * t.sp;
       cb(s / t.len, pointAt(t, s));
@@ -115,6 +117,7 @@ export class DotSystem {
     for (const t of this.tracks) {
       if (t.n === 0) continue;
       if (hidden && hidden.has(t.id)) continue;
+      if (t.isOpen && t.isOpen()) continue;
       const a = alpha && alpha[t.id] != null ? alpha[t.id] : 1;
       if (a <= 0.01) continue;
       ctx.globalAlpha = a;

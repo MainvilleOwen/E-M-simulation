@@ -87,7 +87,12 @@ export function solveRunner(parent, life, problem, ctx, { index = 0 } = {}) {
   function startVariation() {
     mode = 'variation';
     const v = problem.variation;
-    load(v.make(Math.random));
+    // New numbers: never the worked example's (or the previous variation's) numbers again.
+    const keys = Object.keys(problem.defaults).filter((k) => k !== 'ask');
+    const same = (a, b) => keys.every((k) => a[k] === b[k]);
+    let next = v.make(Math.random);
+    for (let tries = 0; tries < 30 && (same(next, problem.defaults) || (mode === 'variation' && same(next, params))); tries++) next = v.make(Math.random);
+    load(next);
     renderStatement();
     stepsList.replaceChildren();
     shown = problem.steps.length;
@@ -101,6 +106,13 @@ export function solveRunner(parent, life, problem, ctx, { index = 0 } = {}) {
     const feedback = h('p', { class: 'feedback', 'aria-live': 'polite' });
     const check = h('button', { type: 'button', class: 'btn btn-primary answer-check' }, 'Check');
     const another = h('button', { type: 'button', class: 'btn answer-new' }, 'New numbers');
+    const worked = h('ol', { class: 'steps worked-steps', hidden: true });
+    const showWorked = h('button', { type: 'button', class: 'btn btn-ghost show-worked', hidden: true }, 'Show the worked steps for these numbers');
+    showWorked.addEventListener('click', () => {
+      worked.replaceChildren(...problem.steps.map((st) => h('li', { class: 'step' }, h('span', { html: st.text(params, ctx) }))));
+      worked.hidden = false;
+      showWorked.hidden = true;
+    });
     const doCheck = () => {
       const val = parseAnswer(input.value, ans.unit);
       if (!Number.isFinite(val)) {
@@ -122,6 +134,7 @@ export function solveRunner(parent, life, problem, ctx, { index = 0 } = {}) {
           h('br'),
           h('span', { html: `Revisit step ${ri + 1}: ${stepHTML}` }),
         );
+        if (worked.hidden) showWorked.hidden = false;
       }
     };
     check.addEventListener('click', doCheck);
@@ -131,6 +144,8 @@ export function solveRunner(parent, life, problem, ctx, { index = 0 } = {}) {
       h('p', { class: 'variation-q', html: v.ask(params) }),
       h('div', { class: 'answer-row' }, input, h('span', { class: 'answer-unit' }, ans.unit || ''), check),
       feedback,
+      showWorked,
+      worked,
       h('div', { class: 'btn-row' }, another, h('button', { type: 'button', class: 'btn btn-ghost', on: { click: restart } }, 'Back to the worked solution')),
     );
     varBox.hidden = false;

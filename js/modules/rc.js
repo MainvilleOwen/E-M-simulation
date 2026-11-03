@@ -1,6 +1,6 @@
 // M2. RC circuits: why a capacitor charges fast at first, then slower and slower.
 import { h, infoNote } from '../ui/dom.js';
-import { moduleShell, viewBody, ctrlCard, placeResponsive } from '../ui/module-shell.js';
+import { moduleShell, viewBody, ctrlCard, placeResponsive, dockOnPhone } from '../ui/module-shell.js';
 import { CircuitView, bindLayout } from '../ui/circuit-view.js';
 import { slider, segmented, readouts, equationReveal, linkSymbols, timeControls } from '../ui/controls.js';
 import { LivePlot } from '../ui/plot.js';
@@ -55,10 +55,10 @@ function pushBars(mode) {
     h('p', { class: 'small muted pb-note' }, 'The net push is the drop across R, so it sets the current: I = (net push) / R.'));
   return {
     el,
-    set(emf, vc, vmax) {
+    /** bat: battery push in the loop (0 if the switch is open); vc: q/C; n: drop across R (from the solver). */
+    set(batV, vc, n, vmax) {
       const pct = (v) => `${Math.max(0, Math.min(100, (100 * v) / vmax))}%`;
-      const n = mode === 'charge' ? emf - vc : vc;
-      bat.fill.style.width = pct(emf); bat.val.textContent = f(emf, 'V');
+      bat.fill.style.width = pct(batV); bat.val.textContent = f(batV, 'V');
       cap.fill.style.width = pct(vc); cap.val.textContent = f(vc, 'V');
       net.fill.style.width = pct(n); net.val.textContent = f(n, 'V');
     },
@@ -77,7 +77,10 @@ function mountLab(container, life, mode) {
   const s = { R: RANGES.rcR.value, C: RANGES.rcC.value };
   const scales = { vMin: 0, vMax: EMF, dotK: 40000, vmax: 80, pushPerVolt: 1.6, qPerMark: 0.3e-3, maxMarks: 16 };
   const layout = rcLayout();
-  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 330, hmMin: 150, hmMax: 190 });
+  // Discharging: the battery is out of the loop, so the height map follows only the capacitor loop.
+  const pieces = charge ? layout.pieces : layout.pieces.filter((p) => !['B', 'wP', 'Sc', 'wG2'].includes(p.id))
+    .concat([{ id: 'wXd' }, { id: 'Sd' }, { id: 'wGd' }]);
+  const view = new CircuitView(sim, life, { layout, pieces, scales, dotsNote: true, maxHeight: 250, hmMin: 140, hmMax: 170 });
   const plotWrap = h('div', { class: 'plots three' });
   sim.appendChild(plotWrap);
   const pq = new LivePlot(plotWrap, life, { title: 'Charge <i>q</i>(<i>t</i>)', unit: 'C', color: COLORS.trace, sym: 'q' });
@@ -100,8 +103,11 @@ function mountLab(container, life, mode) {
     { key: 'I', label: 'Current <i>I</i>', unit: 'A', sym: 'I' },
     { key: 'Vc', label: '<i>V</i><sub>C</sub> = q/C', unit: 'V', sym: 'Vc' },
     { key: 'frac', label: charge ? 'q as % of Cε' : 'q as % of start', format: (v) => (Number.isFinite(v) ? `${formatNum(v, 3)}%` : '—') },
-    { key: 'emf', label: 'Battery ε', unit: 'V', sym: 'emf' },
-  ]);
+    charge ? { key: 'emf', label: 'Battery ε', unit: 'V', sym: 'emf' } : null,
+    charge ? { key: 'Ebat', label: 'Energy from the battery', unit: 'J' } : null,
+    { key: 'Ustore', label: 'Energy stored in C', unit: 'J' },
+    { key: 'heat', label: 'Heat in R', unit: 'J' },
+  ].filter(Boolean));
   const why = h('div', { class: 'why-note', 'aria-live': 'polite' });
   const sR = slider({ label: 'Resistance <i>R</i>', sym: 'R', min: RANGES.rcR.min, max: RANGES.rcR.max, step: RANGES.rcR.step, value: s.R, unit: 'Ω', onInput: (v) => { const old = s.R; s.R = v; explainChange('R', old, v); start({ keepGhost: true, autoplay: true }); } });
   const sC = slider({ label: 'Capacitance <i>C</i>', sym: 'C', min: RANGES.rcC.min, max: RANGES.rcC.max, step: RANGES.rcC.step, value: s.C, unit: 'F', onInput: (v) => { const old = s.C; s.C = v; explainChange('C', old, v); start({ keepGhost: true, autoplay: true }); } });
@@ -112,7 +118,7 @@ function mountLab(container, life, mode) {
   const runCard = h('section', { class: 'ctrl-card run-card' }, h('h3', {}, 'Run it'), tc.el);
   placeResponsive(runCard, { wideParent: ctrl, narrowParent: sim, narrowAfter: view.el }, life);
   ctrlCard(ctrl, 'The push on the charges', bars.el);
-  ctrlCard(ctrl, 'Change it (replays the run)', sR.el, sC.el, why);
+  dockOnPhone(ctrlCard(ctrl, 'Change it (replays the run)', sR.el, sC.el, why), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el, eq.el,
     h('div', { class: 'info-line' }, h('span', { class: 'small muted' }, 'About time'), infoNote(`At 1× the clock runs in ${clockLabel(LAB_TIME_SCALE)}. The default τ is 3.00 s. The time scale stays fixed when you change R or C, so a slower run really is slower.`)));
 
@@ -209,7 +215,14 @@ function mountLab(container, life, mode) {
     const vc = q / s.C;
     ro.set('tau', tau); ro.set('q', q); ro.set('I', Math.abs(st.I.R)); ro.set('Vc', vc); ro.set('emf', EMF);
     ro.set('frac', (100 * q) / (s.C * EMF));
-    bars.set(EMF, vc, EMF);
+    const sim = runner.sim;
+    if (sim) {
+      ro.set('Ebat', -(sim.energy.B || 0));
+      ro.set('Ustore', 0.5 * s.C * vc * vc);
+      ro.set('heat', sim.energy.R || 0);
+    }
+    const batIn = charge && circuit && circuit.elements.find((e) => e.id === 'Sc').closed;
+    bars.set(batIn ? EMF : 0, vc, Math.abs(st.V.x - st.V.y), EMF);
     updateClock();
   }
 
@@ -227,8 +240,12 @@ function mountLab(container, life, mode) {
       const vy = st.V.y;
       const vc = st.q.C / s.C;
       view.set({
-        labels: { B: f(EMF, 'V'), R: `R = ${f(s.R, 'Ω')}`, C: [`C = ${f(s.C, 'F')}`, `q = ${f(st.q.C, 'C')}`], Sc: charge ? 'switch' : '', Sd: charge ? '' : 'switch' },
-        hmLabels: { B: 'lift ε', R: 'ramp R', C: 'step' },
+        labels: {
+          B: charge ? f(EMF, 'V') : ['battery', '(not in the loop)'], R: `R = ${f(s.R, 'Ω')}`, C: [`C = ${f(s.C, 'F')}`, `q = ${f(st.q.C, 'C')}`],
+          Sc: charge ? 'charge switch' : 'charge switch (open)', Sd: charge ? ['discharge', 'switch', '(open)'] : ['discharge', 'switch'],
+        },
+        alpha: charge ? null : { B: 0.35, wP: 0.35, Sc: 0.5 },
+        hmLabels: charge ? { B: 'lift ε', R: 'ramp R', C: 'step q/C' } : { R: 'ramp R (charge slides down it, leftward)', C: 'lift q/C' },
         annotations: (T) => [
           { x: T.x(xR), v0: vx, v1: vy, label: charge ? `net push ε − q/C = ${f(vx - vy, 'V')}` : `net push q/C = ${f(vy - vx, 'V')}`, align: 'right', labelDx: -(T.x(layout.elements.R.b[0]) - T.x(layout.elements.R.a[0])) * 0.25 - 6 },
           { x: T.x(xC) - 18, v0: 0, v1: vc, color: COLORS.neg, label: `q/C = ${f(vc, 'V')}`, align: 'right', labelDx: -8 },

@@ -1,6 +1,6 @@
 // M3. Capacitors: plate lab, series vs parallel, charge sharing.
 import { h, infoNote } from '../ui/dom.js';
-import { moduleShell, viewBody, ctrlCard, placeResponsive } from '../ui/module-shell.js';
+import { moduleShell, viewBody, ctrlCard, placeResponsive, placePredict, dockOnPhone } from '../ui/module-shell.js';
 import { CircuitView, bindLayout, potentialLegend } from '../ui/circuit-view.js';
 import { slider, segmented, readouts, equationReveal, linkSymbols, timeControls } from '../ui/controls.js';
 import { predictCard } from '../ui/predict.js';
@@ -11,7 +11,7 @@ import { COLORS, colorForV, rgba } from '../ui/colors.js';
 import { arrow, label, roundRect } from '../ui/schematic.js';
 import { estimateTimeConstants } from '../core/circuit.js';
 import { EPS0 } from '../core/fields.js';
-import { plateCapacitance, plateForce } from '../core/formulas.js';
+import { plateCapacitance, plateForce, seriesC, parallelC } from '../core/formulas.js';
 import { formatSI } from '../core/format.js';
 import { RANGES, capSeriesCircuit, capParallelCircuit, chargeSharingCircuit } from '../content/presets.js';
 import { capSeriesLayout, capParallelLayout, chargeSharingLayout } from '../content/layouts.js';
@@ -166,8 +166,8 @@ export function drawPlateLab(stage, lab, { highlight = null } = {}) {
   const W = stage.w;
   const H = stage.h;
   const cx = W / 2;
-  const cy = H * 0.4;
-  const Lp = Math.max(24, Math.min(H * 0.62, (Math.sqrt(lab.A) / 2) * H * 0.62));
+  const cy = H * 0.47;
+  const Lp = Math.max(24, Math.min(H * 0.5, (Math.sqrt(lab.A) / 2) * H * 0.5));
   const gap = Math.max(8, (lab.d / 10e-3) * W * 0.5);
   const xl = cx - gap / 2;
   const xr = cx + gap / 2;
@@ -177,7 +177,7 @@ export function drawPlateLab(stage, lab, { highlight = null } = {}) {
   const vMax = Math.max(V, 1e-9);
   const cHi = colorForV(V, 0, vMax);
   const cLo = colorForV(0, 0, vMax);
-  const yb = H * 0.86;
+  const yb = H * 0.88;
   const bx = cx;
   ctx.lineCap = 'round';
   // Wires
@@ -192,7 +192,7 @@ export function drawPlateLab(stage, lab, { highlight = null } = {}) {
     ctx.strokeStyle = '#c8d0e0';
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(bx - 40, yb); ctx.lineTo(bx - 20, yb - 14); ctx.stroke();
-    label(ctx, 'disconnected', bx - 30, yb - 30, { size: 13, color: COLORS.muted });
+    label(ctx, 'disconnected', bx - 44, yb - 16, { size: 13, color: COLORS.ink, align: 'right' });
   }
   // Battery (long plate = + on the left)
   ctx.lineCap = 'butt';
@@ -203,7 +203,7 @@ export function drawPlateLab(stage, lab, { highlight = null } = {}) {
   ctx.lineWidth = 6;
   ctx.beginPath(); ctx.moveTo(bx + 4, yb - 8); ctx.lineTo(bx + 4, yb + 8); ctx.stroke();
   ctx.lineCap = 'round';
-  label(ctx, `battery ε = ${f(lab.emf, 'V')}`, bx, yb + 26, { size: 13, color: COLORS.ink });
+  label(ctx, `battery ε = ${f(lab.emf, 'V')}`, bx + 14, yb + 22, { size: 13, color: COLORS.ink, align: 'left' });
   // Field lines (density ∝ E)
   const eRatio = lab.E / lab.Eref;
   const nLines = Math.min(Math.floor(Lp / 7), Math.round((Lp * eRatio) / 20));
@@ -244,12 +244,12 @@ export function drawPlateLab(stage, lab, { highlight = null } = {}) {
     ctx.strokeStyle = COLORS.highlight; ctx.lineWidth = 3;
     roundRect(ctx, xl + 2, top - 4, gap - 4, Lp + 8, 6); ctx.stroke();
   }
-  // Gap dimension
-  const yd = bot + 18;
+  // Gap dimension (above the plates, clear of the wires)
+  const yd = top - 12;
   ctx.strokeStyle = COLORS.muted; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(xl, yd); ctx.lineTo(xr, yd); ctx.moveTo(xl, yd - 5); ctx.lineTo(xl, yd + 5); ctx.moveTo(xr, yd - 5); ctx.lineTo(xr, yd + 5); ctx.stroke();
-  label(ctx, `d = ${f(lab.d, 'm')}`, cx, yd + 14, { size: 13, color: COLORS.ink });
-  label(ctx, `A = ${f(lab.A, 'm²')} (plates seen edge-on)`, cx, Math.max(12, top - 16), { size: 13, color: COLORS.muted });
+  label(ctx, `d = ${f(lab.d, 'm')}`, cx, yd - 14, { size: 13, color: COLORS.ink });
+  label(ctx, `A = ${f(lab.A, 'm²')} (plates seen edge-on)`, 8, 14, { size: 13, color: COLORS.muted, align: 'left' });
   // Charge packets (conventional current)
   for (const p of lab.packets) {
     if (p.t < 0) continue;
@@ -289,6 +289,7 @@ function mountPlates(container, life) {
     { key: 'E', label: 'Field <i>E</i>', unit: 'V/m', sym: 'E' },
     { key: 'U', label: 'Energy <i>U</i>', unit: 'J', sym: 'U' },
     { key: 'F', label: 'Force between plates', unit: 'N' },
+    { key: 'u', label: 'Energy density u = ½ε<sub>0</sub>E<sup>2</sup>', unit: 'J/m³', sym: 'u' },
   ]);
   const counters = readouts([
     { key: 'W', label: 'Work you did', unit: 'J' },
@@ -308,7 +309,7 @@ function mountPlates(container, life) {
   const sV = slider({ label: 'Battery ε', sym: 'emf', min: RANGES.plateV.min, max: RANGES.plateV.max, value: RANGES.plateV.value, log: true, unit: 'V', onInput: (v) => { lab.setEmf(v); lastMove = null; refresh(); } });
   const resetBtn = h('button', { type: 'button', class: 'btn btn-ghost reset-counters' }, 'Reset the counters');
   resetBtn.addEventListener('click', () => { lab.resetCounters(); refresh(); });
-  const eq = equationReveal('<span class="sym" data-sym="C"><i>C</i></span> = ε<sub>0</sub><span class="sym" data-sym="A"><i>A</i></span> / <span class="sym" data-sym="d"><i>d</i></span>, &nbsp; <span class="sym" data-sym="Q"><i>Q</i></span> = <span class="sym" data-sym="C"><i>C</i></span><span class="sym" data-sym="V"><i>V</i></span>, &nbsp; <span class="sym" data-sym="E"><i>E</i></span> = <span class="sym" data-sym="V"><i>V</i></span> / <span class="sym" data-sym="d"><i>d</i></span>, &nbsp; <span class="sym" data-sym="U"><i>U</i></span> = ½<span class="sym" data-sym="C"><i>C</i></span><span class="sym" data-sym="V"><i>V</i></span><sup>2</sup>');
+  const eq = equationReveal('<span class="sym" data-sym="C"><i>C</i></span> = ε<sub>0</sub><span class="sym" data-sym="A"><i>A</i></span> / <span class="sym" data-sym="d"><i>d</i></span>, &nbsp; <span class="sym" data-sym="Q"><i>Q</i></span> = <span class="sym" data-sym="C"><i>C</i></span><span class="sym" data-sym="V"><i>V</i></span>, &nbsp; <span class="sym" data-sym="E"><i>E</i></span> = <span class="sym" data-sym="V"><i>V</i></span> / <span class="sym" data-sym="d"><i>d</i></span>, &nbsp; <span class="sym" data-sym="U"><i>U</i></span> = ½<span class="sym" data-sym="C"><i>C</i></span><span class="sym" data-sym="V"><i>V</i></span><sup>2</sup> = <span class="sym" data-sym="u"><i>u</i></span> × <span class="sym" data-sym="A"><i>A</i></span><span class="sym" data-sym="d"><i>d</i></span>', { note: 'The energy sits in the field: energy density u times the volume between the plates gives U.' });
 
   // Clicker question: C doubles with Q fixed
   let anim = null;
@@ -331,22 +332,28 @@ function mountPlates(container, life) {
   });
   life.add(() => card.destroy());
 
-  const changeCard = ctrlCard(ctrl, 'Change it', modeSeg.el, sA.el, sD.el, sV.el, why);
+  const changeCard = ctrlCard(ctrl, 'Change it', modeSeg.el, sA.el, sD.el, sV.el);
+  panel.after(why);
+  dockOnPhone(changeCard, life);
   const measureCard = h('section', { class: 'ctrl-card' }, h('h3', {}, 'What the sim measures'), ro.el, eq.el);
   const energyCard = h('section', { class: 'ctrl-card' }, h('h3', {}, 'Energy bookkeeping'), counters.el, check, resetBtn);
   placeResponsive(measureCard, { wideParent: sim, wideAfter: panel, narrowParent: ctrl, narrowAfter: changeCard }, life);
   placeResponsive(energyCard, { wideParent: sim, wideAfter: measureCard, narrowParent: ctrl, narrowAfter: measureCard }, life);
+  panel.after(why); // the explanation sits right under the plates
   placeResponsive(card.el, { wideParent: ctrl, narrowParent: ctrl, narrowAfter: energyCard }, life);
 
   function refresh() {
     ro.set('C', lab.C); ro.set('Q', lab.Q); ro.set('V', lab.V); ro.set('E', lab.E); ro.set('U', lab.U); ro.set('F', lab.F);
+    ro.set('u', 0.5 * EPS0 * lab.E * lab.E);
     counters.set('W', lab.W);
     counters.set('dU', lab.dU);
     counters.set('bat', -lab.Wbat);
     legend.set(0, lab.V);
     const conn = lab.connected;
     check.innerHTML = conn
-      ? `Battery connected: your work + the battery’s work = ΔU. Here ${f(lab.W, 'J')} + ${f(lab.Wbat, 'J')} = ${f(lab.W + lab.Wbat, 'J')}.`
+      ? (lab.Wbat >= 0
+        ? `Battery connected: your work (${f(lab.W, 'J')}) + the battery’s work (${f(lab.Wbat, 'J')}) = ΔU (${f(lab.W + lab.Wbat, 'J')}).`
+        : `Battery connected: your work (${f(lab.W, 'J')}) − the energy returned to the battery (${f(-lab.Wbat, 'J')}) = ΔU (${f(lab.W + lab.Wbat, 'J')}).`)
       : `Battery disconnected: all your work is stored. W = ${f(lab.W, 'J')}, ΔU = ${f(lab.dU, 'J')}.`;
     let text;
     if (conn) {
@@ -417,8 +424,8 @@ function renderCombo(host, life, kind, s) {
   const layout = series ? capSeriesLayout() : capParallelLayout();
   const build = (closed) => (series ? capSeriesCircuit(s.emf, s.C1, s.C2, 1, closed) : capParallelCircuit(s.emf, s.C1, s.C2, 1, closed));
   // One dot scale for the screen: the default peak current (18 V through 1 Ω) gives 30 units/s.
-  const scales = { vMin: 0, vMax: RANGES.capEmf.max, dotK: 30 / 18, vmax: 80, qPerMark: 12e-6, maxMarks: 14 };
-  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 340, hmMin: 140, hmMax: 190 });
+  const scales = { vMin: 0, vMax: s.emf, dotK: 30 / 18, vmax: 80, qPerMark: 12e-6, maxMarks: 14 };
+  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 250, hmMin: 140, hmMax: 170 });
   const tauDefault = estimateTimeConstants(build(true)).tauMin;
   const runner = new TransientRunner({ timeScale: tauDefault / 1.2 });
   const tc = timeControls({
@@ -431,7 +438,8 @@ function renderCombo(host, life, kind, s) {
     h('p', { class: 'small muted' }, `Clock: ${clockLabel(tauDefault / 1.2)}. Real charging through 1 Ω of wire takes microseconds.`));
   placeResponsive(runCard, { wideParent: ctrl, narrowParent: sim, narrowAfter: view.el }, life);
   const items = [
-    { key: 'Ceq', label: '<i>C</i><sub>eq</sub> = Q<sub>battery</sub> / ε', unit: 'F', sym: 'Ceq' },
+    { key: 'Ceq', label: series ? '<i>C</i><sub>eq</sub> = (1/C<sub>1</sub> + 1/C<sub>2</sub>)<sup>−1</sup>' : '<i>C</i><sub>eq</sub> = C<sub>1</sub> + C<sub>2</sub>', unit: 'F', sym: 'Ceq' },
+    { key: 'Qbat', label: 'Charge from the battery so far', unit: 'C' },
     { key: 'Q1', label: '<i>Q</i><sub>1</sub>', unit: 'C', sym: 'Q1' },
     { key: 'Q2', label: '<i>Q</i><sub>2</sub>', unit: 'C', sym: 'Q2' },
     { key: 'V1', label: '<i>V</i><sub>1</sub> = Q<sub>1</sub>/C<sub>1</sub>', unit: 'V', sym: 'V1' },
@@ -440,17 +448,43 @@ function renderCombo(host, life, kind, s) {
   if (series) items.push({ key: 'island', label: 'Island net charge', unit: 'C' });
   const ro = readouts(items);
   const why = h('div', { class: 'why-note' });
-  const sC1 = slider({ label: 'C<sub>1</sub>', sym: 'C1', ...RANGES.capC, unit: 'F', value: s.C1, onInput: (v) => { s.C1 = v; start(); } });
-  const sC2 = slider({ label: 'C<sub>2</sub>', sym: 'C2', ...RANGES.capC2, unit: 'F', value: s.C2, onInput: (v) => { s.C2 = v; start(); } });
+  const sC1 = slider({ label: 'C<sub>1</sub>', sym: 'C1', ...RANGES.capC, unit: 'F', value: s.C1, onInput: (v) => { s.C1 = v; start(); makeCard(); } });
+  const sC2 = slider({ label: 'C<sub>2</sub>', sym: 'C2', ...RANGES.capC2, unit: 'F', value: s.C2, onInput: (v) => { s.C2 = v; start(); makeCard(); } });
   const sE = slider({ label: 'Battery ε', sym: 'emf', ...RANGES.capEmf, unit: 'V', value: s.emf, onInput: (v) => { s.emf = v; start(); } });
   const eq = equationReveal(series
     ? '1/<span class="sym" data-sym="Ceq"><i>C</i><sub>eq</sub></span> = 1/<span class="sym" data-sym="C1"><i>C</i><sub>1</sub></span> + 1/<span class="sym" data-sym="C2"><i>C</i><sub>2</sub></span>, &nbsp; <span class="sym" data-sym="Q1"><i>Q</i><sub>1</sub></span> = <span class="sym" data-sym="Q2"><i>Q</i><sub>2</sub></span>'
     : '<span class="sym" data-sym="Ceq"><i>C</i><sub>eq</sub></span> = <span class="sym" data-sym="C1"><i>C</i><sub>1</sub></span> + <span class="sym" data-sym="C2"><i>C</i><sub>2</sub></span>, &nbsp; <span class="sym" data-sym="V1"><i>V</i><sub>1</sub></span> = <span class="sym" data-sym="V2"><i>V</i><sub>2</sub></span> = ε');
-  ctrlCard(ctrl, 'Change it', sC1.el, sC2.el, sE.el);
+  dockOnPhone(ctrlCard(ctrl, 'Change it', sC1.el, sC2.el, sE.el), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el, why, eq.el);
+  // Slide clicker questions, as predict-then-reveal
+  let card = null;
+  const cardHost = h('div');
+  placePredict(cardHost, sim, ctrl, life);
+  function makeCard() {
+    if (card) card.destroy();
+    const correct = series ? 'same' : (s.C1 === s.C2 ? 'same' : 'bigger');
+    card = predictCard({
+      title: 'Clicker question',
+      prompt: series
+        ? `C<sub>1</sub> = ${f(s.C1, 'F')} and C<sub>2</sub> = ${f(s.C2, 'F')} are in series on the battery. When the switch closes, which capacitor ends up with more charge?`
+        : `C<sub>1</sub> = ${f(s.C1, 'F')} and C<sub>2</sub> = ${f(s.C2, 'F')} are in parallel on the battery. When the switch closes, which capacitor ends up with more charge?`,
+      options: [{ id: 'bigger', label: 'The bigger capacitor' }, { id: 'smaller', label: 'The smaller capacitor' }, { id: 'same', label: 'They hold the same charge' }],
+      correct,
+      delay: 2600,
+      onPick: () => { start(); play(); },
+      explain: () => (series
+        ? '<p>The island between them starts neutral and cannot gain or lose charge, so −Q on one inner plate means +Q on the other: both hold the same Q. The smaller capacitor needs a bigger voltage to hold that charge (V = Q/C).</p>'
+        : '<p>Both are connected to the same two heights, so both have the same V. Q = CV, so the bigger capacitor holds more charge, in proportion to C.</p>'),
+    });
+    cardHost.replaceChildren(card.el);
+  }
+  life.add(() => { if (card) card.destroy(); });
+
   let circuit = null;
   function start() {
     circuit = build(false);
+    scales.vMax = s.emf;
+    view.refreshLegend();
     layout.elements.C1.plateScale = plateScaleFor(s.C1);
     layout.elements.C2.plateScale = plateScaleFor(s.C2);
     bindLayout(layout, circuit);
@@ -467,6 +501,7 @@ function renderCombo(host, life, kind, s) {
     tc.setPlaying(true);
   }
   start();
+  makeCard();
   const island = layout.island;
   life.frame((dt) => {
     runner.frame(dt);
@@ -479,7 +514,7 @@ function renderCombo(host, life, kind, s) {
       const v1 = q1 / s.C1;
       const v2 = q2 / s.C2;
       const qBat = series ? q1 : q1 + q2;
-      ro.set('Ceq', qBat / s.emf); ro.set('Q1', q1); ro.set('Q2', q2); ro.set('V1', v1); ro.set('V2', v2);
+      ro.set('Ceq', series ? seriesC(s.C1, s.C2) : parallelC(s.C1, s.C2)); ro.set('Qbat', qBat); ro.set('Q1', q1); ro.set('Q2', q2); ro.set('V1', v1); ro.set('V2', v2);
       if (series) ro.set('island', Math.abs(q2 - q1) < 1e-15 ? 0 : q2 - q1);
       const full = qBat > 0.995 * (series ? (s.C1 * s.C2) / (s.C1 + s.C2) : s.C1 + s.C2) * s.emf;
       if (full) {
@@ -494,7 +529,7 @@ function renderCombo(host, life, kind, s) {
       }
       view.set({
         labels: series
-          ? { B: f(s.emf, 'V'), S: 'switch', Rw: 'wire 1 Ω', C1: [`C₁ ${f(s.C1, 'F')}`], C2: [`C₂ ${f(s.C2, 'F')}`, `${f(v2, 'V')}`] }
+          ? { B: f(s.emf, 'V'), S: 'switch', Rw: 'wire 1 Ω', C1: [`C₁ ${f(s.C1, 'F')}`, f(v1, 'V')], C2: [`C₂ ${f(s.C2, 'F')}`, f(v2, 'V')] }
           : { B: f(s.emf, 'V'), S: 'switch', Rw: 'wire 1 Ω', C1: [`C₁ ${f(s.C1, 'F')}`, f(q1, 'C')], C2: [`C₂ ${f(s.C2, 'F')}`, f(q2, 'C')] },
         hmLabels: { B: 'ε', C1: 'C₁', C2: 'C₂' },
         drawSchematicExtra: island ? (ctx, T) => {
@@ -546,7 +581,7 @@ function mountSharing(container, life) {
   const s = { C1: RANGES.shareC1.value, C2: RANGES.shareC2.value, V0: RANGES.shareV.value, Rw: RANGES.shareRw.value };
   const layout = chargeSharingLayout();
   const scales = { vMin: 0, vMax: RANGES.shareV.value, dotK: 0.25, vmax: 80, qPerMark: 80e-6, maxMarks: 14 };
-  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 340, hmMin: 140, hmMax: 200 });
+  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 250, hmMin: 140, hmMax: 170 });
   const tauDefault = estimateTimeConstants(chargeSharingCircuit(s.C1, s.V0, s.C2, s.Rw, true)).tauMin;
   const timeScale = tauDefault / 1.5;
   const runner = new TransientRunner({ timeScale });
@@ -575,7 +610,7 @@ function mountSharing(container, life) {
   const sR = slider({ label: 'Wire resistance', sym: 'Rw', ...RANGES.shareRw, unit: 'Ω', value: s.Rw, onInput: (v) => { s.Rw = v; start(true); } });
   const eq = equationReveal('<i>V</i> = <span class="sym" data-sym="Q"><i>Q</i></span> / (<span class="sym" data-sym="C1"><i>C</i><sub>1</sub></span> + <span class="sym" data-sym="C2"><i>C</i><sub>2</sub></span>), &nbsp; <span class="sym" data-sym="Ui"><i>U</i><sub>i</sub></span> = ½<span class="sym" data-sym="C1"><i>C</i><sub>1</sub></span><span class="sym" data-sym="V0"><i>V</i><sub>0</sub></span><sup>2</sup>, &nbsp; <span class="sym" data-sym="U"><i>U</i><sub>f</sub></span> = ½(<span class="sym" data-sym="C1"><i>C</i><sub>1</sub></span> + <span class="sym" data-sym="C2"><i>C</i><sub>2</sub></span>)<i>V</i><sup>2</sup>');
   ctrlCard(ctrl, 'Where the energy is', bars.el, why);
-  ctrlCard(ctrl, 'Change it', sC1.el, sC2.el, sV.el, sR.el);
+  dockOnPhone(ctrlCard(ctrl, 'Change it', sC1.el, sC2.el, sV.el, sR.el), life);
   ctrlCard(ctrl, 'What the sim measures', ro.el, eq.el);
   let circuit = null;
   let rwNote = false;

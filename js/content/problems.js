@@ -2,7 +2,7 @@
 // and a variation generator. Every number shown is computed by the solver at runtime.
 // Pure module (no DOM): `ctx` is supplied by each module's Solve view.
 import { solveDC, equivalentResistance, Transient, estimateTimeConstants } from '../core/circuit.js';
-import { formatSI } from '../core/format.js';
+import { formatSI, toSig, formatSci } from '../core/format.js';
 import {
   combinationCircuit, twoBatteryCircuit, oneResistor, rcExample1, rcExample2,
   capSeriesCircuit, chargeSharingCircuit,
@@ -45,20 +45,20 @@ export const CIRCUIT_PROBLEMS = [
     id: 'combination',
     title: 'Reduce a combination circuit',
     defaults: { emf: 42, Ra: 8, Rb: 4, Rc: 6, Rd: 3, ask: 'Id' },
-    statement: (p) => `<p>A ${p.emf} V battery drives R<sub>a</sub> = ${p.Ra} Ω and R<sub>b</sub> = ${p.Rb} Ω in series, followed by R<sub>c</sub> = ${p.Rc} Ω in parallel with R<sub>d</sub> = ${p.Rd} Ω.</p>
-      <p>Find (a) the equivalent resistance, (b) the current from the battery, and (c) the current in R<sub>d</sub>.</p>`,
+    statement: (p) => `<p>A ${p.emf} V battery drives R<sub>1</sub> = ${p.Ra} Ω and R<sub>2</sub> = ${p.Rb} Ω in series, followed by R<sub>3</sub> = ${p.Rc} Ω in parallel with R<sub>4</sub> = ${p.Rd} Ω.</p>
+      <p>Find (a) the equivalent resistance, (b) the current from the battery, and (c) the current in R<sub>4</sub>.</p>`,
     setup: (ctx, p) => ctx.load('combination', p),
     steps: [
       {
-        text: (p) => `R<sub>a</sub> and R<sub>b</sub> carry the same current (nothing branches off between them), so they are in series: ${p.Ra} Ω + ${p.Rb} Ω = ${f(combinationNumbers(p).Rab, 'Ω')}.`,
+        text: (p) => `R<sub>1</sub> and R<sub>2</sub> carry the same current (nothing branches off between them), so they are in series: R<sub>12</sub> = ${p.Ra} Ω + ${p.Rb} Ω = ${f(combinationNumbers(p).Rab, 'Ω')}.`,
         act: (ctx) => ctx.reduce(1, ['Ra', 'Rb']),
       },
       {
-        text: (p) => `R<sub>c</sub> and R<sub>d</sub> share the same top and bottom heights, so they are in parallel: (1/${p.Rc} + 1/${p.Rd})<sup>−1</sup> = ${f(combinationNumbers(p).Rcd, 'Ω')}.`,
+        text: (p) => `R<sub>3</sub> and R<sub>4</sub> share the same top and bottom heights, so they are in parallel: R<sub>34</sub> = (1/${p.Rc} Ω + 1/${p.Rd} Ω)<sup>−1</sup> = ${f(combinationNumbers(p).Rcd, 'Ω')}.`,
         act: (ctx) => ctx.reduce(2, ['Rc', 'Rd']),
       },
       {
-        text: (p) => { const n = combinationNumbers(p); return `${f(n.Rab, 'Ω')} and ${f(n.Rcd, 'Ω')} are in series: R<sub>eq</sub> = ${f(n.Req, 'Ω')}.`; },
+        text: (p) => { const n = combinationNumbers(p); return `R<sub>12</sub> and R<sub>34</sub> are in series: R<sub>eq</sub> = ${f(n.Rab, 'Ω')} + ${f(n.Rcd, 'Ω')} = ${f(n.Req, 'Ω')}.`; },
         act: (ctx) => ctx.reduce(3, ['Rab', 'Rcd']),
       },
       {
@@ -66,7 +66,7 @@ export const CIRCUIT_PROBLEMS = [
         act: (ctx) => ctx.highlight(['wA', 'wB']),
       },
       {
-        text: (p) => { const n = combinationNumbers(p); return `Expand back: the parallel pair drops I × ${f(n.Rcd, 'Ω')} = ${f(n.Vcd, 'V')}, the same for both branches. So I<sub>d</sub> = ${f(n.Vcd, 'V')} / ${p.Rd} Ω = ${f(n.Id, 'A')} (and I<sub>c</sub> = ${f(n.Ic, 'A')}).`; },
+        text: (p) => { const n = combinationNumbers(p); return `Expand back: R<sub>34</sub> drops I × R<sub>34</sub> = ${f(n.Vcd, 'V')}, the same for R<sub>3</sub> and R<sub>4</sub>. So I<sub>4</sub> = ${f(n.Vcd, 'V')} / ${p.Rd} Ω = ${f(n.Id, 'A')} (and I<sub>3</sub> = ${f(n.Ic, 'A')}).`; },
         act: (ctx) => ctx.expand(0, ['Rd']),
       },
     ],
@@ -79,7 +79,7 @@ export const CIRCUIT_PROBLEMS = [
       ask: (p) => ({
         Req: 'What is the equivalent resistance of the whole circuit?',
         I: 'What current does the battery deliver?',
-        Id: `What is the current in R<sub>d</sub> = ${p.Rd} Ω?`,
+        Id: `What is the current in R<sub>4</sub> = ${p.Rd} Ω?`,
       }[p.ask]),
       answer: (ctx, p) => {
         const n = combinationNumbers(p);
@@ -111,11 +111,11 @@ export const CIRCUIT_PROBLEMS = [
         act: (ctx) => ctx.highlight(['R2', 'R3', 'B2']),
       },
       {
-        text: () => { return 'Junction rule at the top node (in = out): I<sub>1</sub> + I<sub>3</sub> = I<sub>2</sub>.'; },
+        text: (p) => { const n = twoBatteryNumbers(p); return `Junction rule at the top node (in = out): I<sub>1</sub> + I<sub>3</sub> = I<sub>2</sub>, so (${p.E1} − V)/${p.R1} + (${p.E2} − V)/${p.R3} = V/${p.R2}. Collect the V terms: V (1/${p.R1} + 1/${p.R2} + 1/${p.R3}) = ${p.E1}/${p.R1} + ${p.E2}/${p.R3}, so V = ${toSig(n.V, 3)} V.`; },
         act: (ctx) => ctx.showJunction(true),
       },
       {
-        text: (p) => { const n = twoBatteryNumbers(p); return `Solving gives V = ${f(n.V, 'V')}, so I<sub>2</sub> = ${f(n.I2, 'A')}. I<sub>3</sub> = ${f(n.I3up, 'A')}: ${n.I3up < 0 ? `negative, so it really flows down, into the + terminal of the ${p.E2} V battery. The magnitude is still right.` : 'positive, so the guess was right.'}`; },
+        text: (p) => { const n = twoBatteryNumbers(p); return `So I<sub>2</sub> = V/${p.R2} = ${toSig(n.I2, 3)} A. I<sub>3</sub> = ${toSig(n.I3up, 3)} A: ${n.I3up < 0 ? `negative, so it really flows down, into the + terminal of the ${p.E2} V battery. The magnitude is still right.` : 'positive, so the guess was right.'}`; },
         act: (ctx) => ctx.showAssumed(true),
       },
     ],
@@ -323,7 +323,7 @@ export const CAP_PROBLEMS = [
     statement: (p) => `<p>A parallel-plate capacitor has plates of area ${f(p.A, 'm²')} separated by ${f(p.d, 'm')} of vacuum, and is connected to ${f(p.V, 'V')}.</p><p>Find (a) the capacitance, (b) the charge on each plate, and (c) the field between the plates.</p>`,
     setup: (ctx, p) => ctx.load('plates', p),
     steps: [
-      { text: (p) => `Capacitance depends only on the geometry: C = ε<sub>0</sub>A / d = (8.85×10<sup>−12</sup>)(${p.A}) / ${f(p.d, 'm')} = ${f(plateNumbers(p).C, 'F')}.`, act: (ctx) => ctx.highlight('C') },
+      { text: (p) => `Capacitance depends only on the geometry: C = ε<sub>0</sub>A / d = (8.85×10<sup>−12</sup> F/m)(${toSig(p.A, 3)} m²) / (${formatSci(p.d, 'm')}) = ${f(plateNumbers(p).C, 'F')}.`, act: (ctx) => ctx.highlight('C') },
       { text: (p) => `The battery moves charge until the plates are ${f(p.V, 'V')} apart in height: Q = CV = ${f(plateNumbers(p).Q, 'C')}.`, act: (ctx) => ctx.highlight('Q') },
       { text: (p) => `The field between the plates is uniform: E = V / d = ${f(plateNumbers(p).E, 'V/m')}.`, act: (ctx) => ctx.highlight('E') },
     ],
@@ -339,7 +339,7 @@ export const CAP_PROBLEMS = [
   },
   {
     id: 'cap-series',
-    title: '6 µF and 3 µF in series on 18 V',
+    title: 'Two capacitors in series',
     defaults: { C1: 6e-6, C2: 3e-6, emf: 18, ask: 'V2' },
     statement: (p) => `<p>Capacitors C<sub>1</sub> = ${f(p.C1, 'F')} and C<sub>2</sub> = ${f(p.C2, 'F')} are connected in series across ${f(p.emf, 'V')}.</p><p>Find the equivalent capacitance, the charge on each, and the voltage across each.</p>`,
     setup: (ctx, p) => ctx.load('series', p),
@@ -360,7 +360,7 @@ export const CAP_PROBLEMS = [
     id: 'sharing',
     title: 'Charge sharing: where did the energy go?',
     defaults: { C1: 8e-6, V0: 120, C2: 4e-6, ask: 'V' },
-    statement: (p) => `<p>A ${f(p.C1, 'F')} capacitor is charged to ${f(p.V0, 'V')}, disconnected, and then connected to an uncharged ${f(p.C2, 'F')} capacitor.</p><p>Find the final voltage, the charge on each, and the energy before and after.</p>`,
+    statement: (p) => `<p>Capacitor C<sub>1</sub> = ${f(p.C1, 'F')} is charged to ${f(p.V0, 'V')}, disconnected, and then connected to an uncharged capacitor C<sub>2</sub> = ${f(p.C2, 'F')}.</p><p>Find the final voltage, the charge on each, and the energy before and after.</p>`,
     setup: (ctx, p) => ctx.load('sharing', p),
     steps: [
       { text: (p) => `Before: Q<sub>0</sub> = C<sub>1</sub>V<sub>0</sub> = ${f(sharingNumbers(p).Q0, 'C')} and U<sub>i</sub> = ½C<sub>1</sub>V<sub>0</sub><sup>2</sup> = ${f(sharingNumbers(p).Ui, 'J')}.`, act: (ctx) => ctx.highlight(['C1']) },
@@ -407,7 +407,7 @@ export const FIELD_PROBLEMS = [
     statement: (p) => `<p>Charge q<sub>1</sub> = ${nC(p.q1)} sits at (−${cm(p.a)}, 0) and q<sub>2</sub> = ${nC(p.q2)} at (+${cm(p.a)}, 0).</p><p>Find the magnitude of the electric field at P = (0, ${cm(p.y)}).</p>`,
     setup: (ctx, p) => ctx.load('superposition', p),
     steps: [
-      { text: (p) => `Each charge is r = √(${cm(p.a)}² + ${cm(p.y)}²) = ${cm(superpositionNumbers(p).r)} from P.`, act: (ctx) => ctx.show('distance') },
+      { text: (p) => `Each charge is r = √((${cm(p.a)})² + (${cm(p.y)})²) = ${cm(superpositionNumbers(p).r)} from P.`, act: (ctx) => ctx.show('distance') },
       { text: (p) => { const n = superpositionNumbers(p); return `Each one alone: E = k|q|/r². E<sub>1</sub> = ${f(n.E1, 'N/C')} ${p.q1 > 0 ? 'away from' : 'toward'} q<sub>1</sub>; E<sub>2</sub> = ${f(n.E2, 'N/C')} ${p.q2 > 0 ? 'away from' : 'toward'} q<sub>2</sub>.`; }, act: (ctx) => ctx.show('parts') },
       { text: (p) => { const n = superpositionNumbers(p); return `Add them as vectors, component by component: E<sub>x</sub> = ${f(n.Ex, 'N/C')}, E<sub>y</sub> = ${f(n.Ey, 'N/C')}.`; }, act: (ctx) => ctx.show('sum') },
       { text: (p) => `|E| = √(E<sub>x</sub>² + E<sub>y</sub>²) = ${f(superpositionNumbers(p).E, 'N/C')}.`, act: (ctx) => ctx.show('sum') },

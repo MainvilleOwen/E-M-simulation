@@ -5,6 +5,10 @@ export function trackErrors(page) {
   const errors = [];
   page.on('console', (msg) => {
     if (msg.type() === 'error') errors.push(`console.error: ${msg.text()}`);
+    // The app reports caught failures as warnings (and shows a calm banner); those are bugs too.
+    if (msg.type() === 'warning' && /failed to (mount|load)|Frame callback failed|Unhandled (error|rejection)|setup failed|step action failed/.test(msg.text())) {
+      errors.push(`console.warn: ${msg.text()}`);
+    }
   });
   page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
   page.on('requestfailed', (req) => {

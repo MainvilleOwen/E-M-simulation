@@ -27,6 +27,15 @@ export function formatSI(value, unit = '', { sig = 3, space = true } = {}) {
   if (!Number.isFinite(value)) return '—';
   if (value === 0) return `${toSig(0, sig)}${sep}${unit}`;
   const abs = Math.abs(value);
+  // A prefix on a squared or cubed unit would scale the unit too (1 mm² = 10⁻⁶ m², not 10⁻³ m²),
+  // so area and volume units are written plainly or in scientific notation.
+  if (/^[A-Za-zµ]+[²³]/.test(unit)) {
+    return abs >= 0.01 && abs < 1e4 ? `${toSig(value, sig)}${sep}${unit}` : formatSci(value, unit, sig);
+  }
+  // Resistances between 1 mΩ and 1 Ω read more naturally as 0.500 Ω.
+  if (unit === 'Ω' && abs >= 1e-3 && abs < 0.9995) return `${toSig(value, sig)}${sep}${unit}`;
+  // Below the smallest prefix, use scientific notation instead of long strings of zeros.
+  if (abs < 1e-15 * 0.9995) return formatSci(value, unit, sig);
   let chosen = PREFIXES[PREFIXES.length - 1];
   for (const p of PREFIXES) {
     if (abs >= p[0] * 0.9995) { chosen = p; break; }
@@ -75,7 +84,10 @@ export function formatSci(value, unit = '', sig = 3) {
 /** Parse a typed answer that may include an SI prefix and unit, e.g. "333 uA", "1.5e-4", "2.0 kΩ". */
 export function parseAnswer(text, unit = '') {
   if (text == null) return NaN;
-  let s = String(text).trim().replace(/−/g, '-').replace(/,/g, '').replace(/\s+/g, '');
+  let s = String(text).trim().replace(/−/g, '-').replace(/\s+/g, '');
+  // A single comma with no point is a decimal comma ("2,50") unless it looks like thousands ("2,500").
+  if (!s.includes('.') && (s.match(/,/g) || []).length === 1 && !/^[-+]?\d{1,3},\d{3}(\D|$)/.test(s)) s = s.replace(',', '.');
+  s = s.replace(/,/g, '');
   s = s.replace(/×10\^?/g, 'e').replace(/x10\^/gi, 'e').replace(/\*10\^/g, 'e');
   if (unit) {
     const u = unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -95,4 +107,28 @@ export function withinTolerance(answer, expected, tol = 0.02) {
   if (!Number.isFinite(answer) || !Number.isFinite(expected)) return false;
   if (expected === 0) return Math.abs(answer) < 1e-12;
   return Math.abs(answer - expected) <= tol * Math.abs(expected) * (1 + 1e-9);
+}
+
+/**
+ * Format several values that appear in one equation with the same prefix (chosen from the largest),
+ * so a sum never mixes A and mA. Returns an array of strings.
+ */
+export function formatSame(values, unit = '', { sig = 3 } = {}) {
+  const finite = values.filter((v) => Number.isFinite(v));
+  if (!finite.length) return values.map(() => '—');
+  const big = Math.max(...finite.map((v) => Math.abs(v)));
+  const ref = formatSI(big, unit, { sig });
+  const prefix = big === 0 ? '' : ref.replace(/^[-\d.]+\s?/, '').replace(/×10\S*\s?/, '').slice(0, -unit.length || undefined);
+  const mult = { T: 1e12, G: 1e9, M: 1e6, k: 1e3, '': 1, m: 1e-3, 'µ': 1e-6, n: 1e-9, p: 1e-12, f: 1e-15 }[prefix] ?? 1;
+  const decimalsFor = (x) => {
+    const bigScaled = big / mult;
+    const mag = bigScaled > 0 ? Math.floor(Math.log10(bigScaled)) : 0;
+    return Math.max(0, sig - 1 - mag);
+  };
+  return values.map((v) => {
+    if (!Number.isFinite(v)) return '—';
+    let t = (v / mult).toFixed(decimalsFor(v));
+    if (/^-0(\.0*)?$/.test(t)) t = t.slice(1);
+    return `${t} ${prefix}${unit}`;
+  });
 }
