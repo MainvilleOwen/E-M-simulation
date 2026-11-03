@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="E&amp;M Lab: see why circuits, capacitors and fields behave the way they do.">
+  <title>E&amp;M Lab</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <a class="skip-link" href="#view">Skip to content</a>
+  <header class="topbar">
+    <a class="brand" href="#/" aria-label="E&amp;M Lab home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 18 L8 6 L13 14 L16 9 L21 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"/></svg>
+      </span>
+      <span>E&amp;M Lab</span>
+    </a>
+    <nav class="topnav" aria-label="Modules">
+      <a href="#/circuits" data-route="circuits">Circuits</a>
+      <a href="#/rc" data-route="rc">RC</a>
+      <a href="#/capacitors" data-route="capacitors">Capacitors</a>
+      <a href="#/fields" data-route="fields">Fields</a>
+    </nav>
+    <button type="button" class="btn btn-ghost help-btn" id="help-btn" aria-label="How to read this app">
+      <span aria-hidden="true">?</span><span class="help-label">How to read this</span>
+    </button>
+  </header>
+  <main id="view" tabindex="-1"></main>
+  <div id="error-banner" class="error-banner" hidden role="alert">
+    <button type="button" id="error-reload">Something went wrong. Tap to reload this module.</button>
+  </div>
+  <noscript><p class="noscript">This app needs JavaScript to run.</p></noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

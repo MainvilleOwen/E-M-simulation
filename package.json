@@ -1,0 +1,19 @@
+{
+  "name": "em-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "E&M Lab: interactive intuition builder for intro E&M (capacitance, current, DC and RC circuits, fields).",
+  "type": "module",
+  "scripts": {
+    "serve": "http-server -p 8080 -c-1 .",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test",
+    "check:links": "node scripts/linkcheck.mjs",
+    "check": "npm run test:unit && npm run check:links && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "http-server": "^14.1.1",
+    "vitest": "^3.2.4"
+  }
+}
