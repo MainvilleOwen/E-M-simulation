@@ -7,7 +7,7 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [x] Phase 0: Setup (package.json, Vitest, Playwright, static server, skeleton index + router + error banner + design tokens)
 - [x] Phase 1: Physics core (circuit.js, fields.js, format.js, section 5 tests): 79 unit tests green
 - [x] Phase 2: UI kit + `#/kitchen-sink` (e2e green, screenshots in checks/phase2 reviewed)
-- [ ] Phase 3: M1 Circuits
+- [x] Phase 3: M1 Circuits (7 views, e2e green both viewports, checks/phase3 reviewed)
 - [ ] Phase 4: M2 RC circuits
 - [ ] Phase 5: M3 Capacitors
 - [ ] Phase 6: M4 Fields & dipoles
@@ -15,8 +15,8 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [ ] Phase 8: Deploy to GitHub Pages (ask Owen first)
 - [ ] Stretch: Inside a resistor
 
-IN PROGRESS: Phase 3, starting M1 Circuits
-Next: write js/modules/circuits.js with views one/series/parallel(compare+predict)/combination(reduce step by step)/bulbs(predict)/kirchhoff(walk the loop)/solve, plus M1 problems in js/content/problems.js and tests/e2e/circuits.spec.js.
+IN PROGRESS: Phase 4, starting M2 RC circuits
+Next: write js/modules/rc.js (charging + discharging with SPDT switch, net push ε − q/C arrow, q/I/V_C live plots with τ, 63%, 37% markers and ghost traces, time controls at a fixed per-preset time scale, R and C sliders replay), RC solve problems (Examples 1 and 2) in problems.js, tests/e2e/rc.spec.js.
 
 ## Notes
 
@@ -37,6 +37,12 @@ Next: write js/modules/circuits.js with views one/series/parallel(compare+predic
 - `js/ui/circuit-view.js`: schematic + height map. Height map uses a "side view" (x from the schematic, so ramps line up under their symbols) unless pieces give explicit x0/x1 (unrolled, used for walk-the-loop).
 - `js/ui/stage.js`: canvases skip drawing when off-screen; e2e sets `window.__emlabAlwaysDraw = true` so full-page screenshots are live.
 - `window.__emlab.stats()` = live frame callbacks (tests check it stays bounded); `window.__emlab.lastAnswer` = current variation answer (tests type it).
+
+## M1 notes
+
+- Views: `#/circuits/one|series|parallel|combination|bulbs|kirchhoff|solve`. Parallel opens in compare mode with a prediction; switches close when she picks.
+- `js/ui/reduce.js` (StageAnimator: highlight a group, then cross-fade to the reduced circuit; every stage is solved fresh). `js/ui/loop-walk.js` (marker + running loop sum).
+- `placePredict()` puts prediction cards top-right on wide screens, above the sim on phones.
 
 ## Blockers
 

@@ -27,23 +27,29 @@ export const RANGES = {
 
 // ---------- M1: resistor circuits ----------
 
-/** One battery (− at node 0, + at node 'p') and one resistor. */
-export function oneResistor(emf, R) {
-  return {
-    ground: '0',
-    elements: [
-      { type: 'V', id: 'B', neg: '0', pos: 'p', V: emf },
-      { type: 'R', id: 'R1', a: 'p', b: '0', R },
-    ],
-  };
+/**
+ * Battery (− at node 0). With sw = true/false a switch S (closed/open) sits between the battery's
+ * + terminal (node 'b') and node 'p'; with sw undefined the + terminal is node 'p' directly.
+ */
+function source(emf, sw) {
+  if (sw === undefined) return [{ type: 'V', id: 'B', neg: '0', pos: 'p', V: emf }];
+  return [
+    { type: 'V', id: 'B', neg: '0', pos: 'b', V: emf },
+    { type: 'S', id: 'S', a: 'b', b: 'p', closed: !!sw },
+  ];
+}
+
+/** One battery and one resistor. */
+export function oneResistor(emf, R, sw) {
+  return { ground: '0', elements: [...source(emf, sw), { type: 'R', id: 'R1', a: 'p', b: '0', R }] };
 }
 
 /** Battery, R1 then R2 in series. */
-export function seriesCircuit(emf, R1, R2) {
+export function seriesCircuit(emf, R1, R2, sw) {
   return {
     ground: '0',
     elements: [
-      { type: 'V', id: 'B', neg: '0', pos: 'p', V: emf },
+      ...source(emf, sw),
       { type: 'R', id: 'R1', a: 'p', b: 'm', R: R1 },
       { type: 'R', id: 'R2', a: 'm', b: '0', R: R2 },
     ],
@@ -51,11 +57,11 @@ export function seriesCircuit(emf, R1, R2) {
 }
 
 /** Battery with R1 ∥ R2. */
-export function parallelCircuit(emf, R1, R2) {
+export function parallelCircuit(emf, R1, R2, sw) {
   return {
     ground: '0',
     elements: [
-      { type: 'V', id: 'B', neg: '0', pos: 'p', V: emf },
+      ...source(emf, sw),
       { type: 'R', id: 'R1', a: 'p', b: '0', R: R1 },
       { type: 'R', id: 'R2', a: 'p', b: '0', R: R2 },
     ],
@@ -80,11 +86,8 @@ export function combinationCircuit(emf, { Ra = 8, Rb = 4, Rc = 6, Rd = 3 } = {},
 }
 
 /** Bulbs: two identical bulbs in series (or one, with B replaced by a wire). */
-export function bulbCircuit(emf, Rbulb, bothBulbs = true) {
-  const els = [
-    { type: 'V', id: 'B', neg: '0', pos: 'p', V: emf },
-    { type: 'R', id: 'LA', a: 'p', b: 'm', R: Rbulb },
-  ];
+export function bulbCircuit(emf, Rbulb, bothBulbs = true, sw) {
+  const els = [...source(emf, sw), { type: 'R', id: 'LA', a: 'p', b: 'm', R: Rbulb }];
   if (bothBulbs) els.push({ type: 'R', id: 'LB', a: 'm', b: '0', R: Rbulb });
   else els.push({ type: 'S', id: 'W', a: 'm', b: '0', closed: true });
   return { ground: '0', elements: els };

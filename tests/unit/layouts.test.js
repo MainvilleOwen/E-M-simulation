@@ -62,6 +62,15 @@ describe('layouts conserve current at every junction', () => {
     checkKCL(L.parallelLayout(false), P.oneResistor(12, 3), 'parallel A');
     for (const st of [0, 1, 2, 3]) checkKCL(L.combinationLayout(st), P.combinationCircuit(42, undefined, st), `combination ${st}`);
     checkKCL(L.bulbLayout(true), P.bulbCircuit(12, 6, true), 'bulbs');
+    for (const sw of [true, false]) {
+      checkKCL(L.oneLayout(true), P.oneResistor(12, 3, sw), `one sw=${sw}`);
+      checkKCL(L.seriesLayout(true, true), P.seriesCircuit(12, 3, 6, sw), `series sw=${sw}`);
+      checkKCL(L.seriesLayout(false, true), P.oneResistor(12, 3, sw), `series A sw=${sw}`);
+      checkKCL(L.parallelLayout(true, true), P.parallelCircuit(12, 3, 6, sw), `parallel B sw=${sw}`);
+      checkKCL(L.parallelLayout(false, true), P.oneResistor(12, 3, sw), `parallel A sw=${sw}`);
+      checkKCL(L.bulbLayout(true, true), P.bulbCircuit(12, 6, true, sw), `bulbs sw=${sw}`);
+      checkKCL(L.bulbLayout(false, true), P.bulbCircuit(12, 6, false, sw), `bulb A sw=${sw}`);
+    }
     checkKCL(L.bulbLayout(false), P.bulbCircuit(12, 6, false), 'bulb A');
     checkKCL(L.twoBatteryLayout(), P.twoBatteryCircuit(), 'two-battery');
   });

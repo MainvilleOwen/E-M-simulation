@@ -1,12 +1,22 @@
 // A linked pair of panels: (a) schematic with tinted wires and dots, (b) height map with the same dots.
 import { h, infoNote } from './dom.js';
-import { Stage, fitTransform } from './stage.js';
+import { Stage } from './stage.js';
 import { DotSystem } from './dots.js';
 import { drawSchematic, bodyHalf } from './schematic.js';
 import { drawHeightMap } from './heightmap.js';
 import { potentialGradientCSS, COLORS } from './colors.js';
 import { formatSI } from '../core/format.js';
 export { bindLayout } from '../content/layouts.js';
+
+/** Bounding box of a layout's drawn content (elements, wires, label anchors), in layout units. */
+export function contentBox(layout) {
+  let x0 = Infinity; let y0 = Infinity; let x1 = -Infinity; let y1 = -Infinity;
+  const add = (p) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
+  for (const el of Object.values(layout.elements || {})) { add(el.a); add(el.b); if (el.labelAt) add(el.labelAt); }
+  for (const w of layout.wires || []) for (const p of w.pts) add(p);
+  if (!Number.isFinite(x0)) return { x: 0, y: 0, w: layout.w || 100, h: layout.h || 60 };
+  return { x: x0, y: y0, w: Math.max(1, x1 - x0), h: Math.max(1, y1 - y0) };
+}
 
 /** Potential legend (DOM). */
 export function potentialLegend(vMin, vMax, { note = true } = {}) {
@@ -42,11 +52,17 @@ export class CircuitView {
     this.el = h('div', { class: 'circuit-view' });
     if (o.title) this.el.appendChild(h('div', { class: 'cv-title', html: o.title }));
     parent.appendChild(this.el);
-    const aspect = o.aspect || o.layout.h / o.layout.w;
+    this.box = o.box || contentBox(o.layout);
+    const aspect = o.aspect || Math.min(0.85, Math.max(0.42, (this.box.h / this.box.w) * 0.92 + 0.1));
     this.schem = new Stage(this.el, life, {
       aspect, minHeight: o.minHeight || 170, maxHeight: o.maxHeight || 420,
       label: o.label || 'Circuit schematic with moving charge dots', className: 'stage-schematic',
     });
+    this.legend = null;
+    if (o.legend !== false) {
+      this.legend = potentialLegend(this.scales.vMin, this.scales.vMax);
+      this.el.appendChild(this.legend.el);
+    }
     this.hm = null;
     if (o.heightMap !== false) {
       this.hmCaption = h('div', { class: 'hm-caption' },
@@ -58,8 +74,17 @@ export class CircuitView {
         label: 'Height map: potential around the loop', className: 'stage-heightmap',
       });
     }
+    if (o.dotsNote) {
+      this.el.appendChild(h('div', { class: 'panel-note' },
+        h('span', {}, 'Dots show conventional (positive) current.'),
+        infoNote('Dots move the way positive charge would flow. In a metal wire the electrons drift the other way. Real drift speed is about 10<sup>−4</sup> m/s; the dots are sped up so you can see them. Dot speed is proportional to current, with one shared scale on this screen.', { label: 'About the dots' })));
+    }
+    this.clampNote = h('div', { class: 'panel-note clamp-note', hidden: true }, 'Some dots are at their speed limit. The readouts are exact.');
+    this.el.appendChild(this.clampNote);
     this.setLayout(o.layout, o.pieces);
   }
+
+  refreshLegend() { if (this.legend) this.legend.set(this.scales.vMin, this.scales.vMax); }
 
   setLayout(layout, pieces) {
     this.layout = layout;
@@ -85,15 +110,26 @@ export class CircuitView {
   /** Per-frame extras: labels, highlight, alpha, marker, annotations, assumed, dotStyles, hmMarker, hmLabels. */
   set(extra) { Object.assign(this.extra, extra); }
 
+  /** Layout → px. Fits the content box (not the nominal layout size) with room for labels above. */
   transform() {
-    const { layout } = this;
-    return fitTransform(layout.w, layout.h, this.schem.w, this.schem.h, this.o.pad != null ? this.o.pad : 14);
+    const b = this.box;
+    const W = this.schem.w;
+    const H = this.schem.h;
+    const padL = 40; // room for the height map's level labels left of the battery lift
+    const padR = 20;
+    const padTop = this.layout.padTop || 30;
+    const padBottom = this.layout.padBottom || 12;
+    const scale = Math.max(0.01, Math.min((W - padL - padR) / b.w, (H - padTop - padBottom) / b.h));
+    const ox = padL + (W - padL - padR - b.w * scale) / 2 - b.x * scale;
+    const oy = padTop + (H - padTop - padBottom - b.h * scale) / 2 - b.y * scale;
+    return { scale, ox, oy, x: (x) => ox + x * scale, y: (y) => oy + y * scale, p: (pt) => [ox + pt[0] * scale, oy + pt[1] * scale] };
   }
 
   frame(dt) {
     const sol = this.sol;
     const s = this.scales;
     this.dots.update(dt, sol ? sol.I : null, s.dotK, s.vmax || 60);
+    if (this.clampNote.hidden === this.dots.clamped) this.clampNote.hidden = !this.dots.clamped;
     if (!this.schem.visible && !(this.hm && this.hm.visible)) return;
     const T = this.transform();
     const x = this.extra;

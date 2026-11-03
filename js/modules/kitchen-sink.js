@@ -1,7 +1,7 @@
 // Hidden #/kitchen-sink page: every UI kit component wired to the real physics core.
-import { h, infoNote } from '../ui/dom.js';
+import { h } from '../ui/dom.js';
 import { moduleShell, viewBody, ctrlCard } from '../ui/module-shell.js';
-import { CircuitView, potentialLegend, bindLayout } from '../ui/circuit-view.js';
+import { CircuitView, bindLayout } from '../ui/circuit-view.js';
 import { slider, segmented, readouts, equationReveal, linkSymbols } from '../ui/controls.js';
 import { LivePlot } from '../ui/plot.js';
 import { compareLayout } from '../ui/compare.js';
@@ -34,10 +34,7 @@ function mountAll(container, life) {
   let R1 = 3; let R2 = 6;
   let circuit = seriesCircuit(12, R1, R2);
   const layout = bindLayout(seriesLayout(), circuit);
-  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales });
-  const legend = potentialLegend(0, 12);
-  view.el.insertBefore(legend.el, view.hmCaption);
-  view.el.appendChild(h('div', { class: 'panel-note' }, 'Dots show conventional current.', infoNote('Dots move the way positive charge would. In a metal wire the electrons actually drift the other way. Real drift speed is about 10⁻⁴ m/s; the dots are sped up so you can see them.', { label: 'About the dots' })));
+  const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true });
   const ro = readouts([
     { key: 'I', label: 'Current <i>I</i>', unit: 'A', sym: 'I' },
     { key: 'Req', label: '<i>R</i><sub>eq</sub>', unit: 'Ω', sym: 'Req' },

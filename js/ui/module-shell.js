@@ -65,3 +65,18 @@ export function ctrlCard(parent, title, ...children) {
   parent.appendChild(card);
   return card;
 }
+
+/**
+ * Put a prediction card where it is seen first: top of the control column on wide screens,
+ * above the simulation on phones. Re-places it if the window crosses the breakpoint.
+ */
+export function placePredict(card, sim, ctrl, life) {
+  const mql = typeof matchMedia === 'function' ? matchMedia('(min-width: 960px)') : null;
+  const place = () => {
+    const wide = mql && mql.matches;
+    const target = wide ? ctrl : sim;
+    if (card.parentNode !== target) target.insertBefore(card, target.firstChild);
+  };
+  place();
+  if (mql) life.on(mql, 'change', place);
+}

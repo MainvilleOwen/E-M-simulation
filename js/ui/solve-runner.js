@@ -14,6 +14,12 @@ import { parseAnswer, withinTolerance, formatSI } from '../core/format.js';
  * }
  * ctx is whatever the module passes (its sim controller).
  */
+/** First sentence of a step's HTML (our own trusted strings), for the "revisit" hint. */
+function firstSentence(html) {
+  const m = String(html).match(/^(.*?[.])(\s|$)/s);
+  return m ? m[1] : html;
+}
+
 export function solveRunner(parent, life, problem, ctx, { index = 0 } = {}) {
   let params = { ...problem.defaults };
   let shown = 0;
@@ -106,14 +112,15 @@ export function solveRunner(parent, life, problem, ctx, { index = 0 } = {}) {
         feedback.className = 'feedback good';
         feedback.textContent = `That matches the sim: ${formatSI(ans.value, ans.unit)}.`;
       } else {
-        const step = problem.steps[v.revisit || 0];
-        const stepText = step ? step.text(params, ctx).replace(/<[^>]+>/g, '') : '';
+        const ri = typeof v.revisit === 'function' ? v.revisit(params) : (v.revisit || 0);
+        const step = problem.steps[ri];
+        const stepHTML = step ? firstSentence(step.text(params, ctx)) : '';
         feedback.className = 'feedback off';
         feedback.innerHTML = '';
         feedback.append(
           `Not quite. You entered ${formatSI(val, ans.unit)}; the sim gives ${formatSI(ans.value, ans.unit)}. `,
           h('br'),
-          `Revisit step ${(v.revisit || 0) + 1}: ${stepText}`,
+          h('span', { html: `Revisit step ${ri + 1}: ${stepHTML}` }),
         );
       }
     };

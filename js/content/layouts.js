@@ -10,8 +10,8 @@ const W = (id, node, flow, ...pts) => ({ id, node, flow, pts });
 export function bindLayout(layout, circuit) {
   const byId = new Map(circuit.elements.map((e) => [e.id, e]));
   for (const [id, el] of Object.entries(layout.elements)) {
-    const ref = byId.get(el.ref || id);
-    if (!ref) continue;
+    const ref = byId.get(el.refId || id);
+    if (!ref) { el.ref = null; continue; }
     el.ref = ref;
     if (ref.type === 'V') { el.na = ref.neg; el.nb = ref.pos; } else { el.na = ref.a; el.nb = ref.b; }
     if (!el.flow) el.flow = [[ref.id, 1]];
@@ -24,67 +24,89 @@ const P = (id, rev = false, dotStyle) => ({ id, rev, dotStyle });
 
 // ---------- M1 ----------
 
-export function oneLayout() {
+/**
+ * Battery on the left side from y = yBot (−) up to y = yTop (+). With sw, the battery is shorter and a
+ * switch S sits above it, so closing the switch is what starts the current.
+ */
+function leftSource(x, yTop, yBot, sw, labelX) {
+  if (!sw) return { B: { kind: 'battery', a: [x, yBot], b: [x, yTop], labelAt: [labelX, (yTop + yBot) / 2], labelAlign: 'left' } };
+  const yMid = yTop + (yBot - yTop) * 0.42;
   return {
-    w: 100, h: 56,
+    B: { kind: 'battery', a: [x, yBot], b: [x, yMid], labelAt: [labelX, (yMid + yBot) / 2], labelAlign: 'left' },
+    S: { kind: 'switch', a: [x, yMid], b: [x, yTop], labelAt: [labelX, (yTop + yMid) / 2], labelAlign: 'left' },
+  };
+}
+const topFlow = (sw) => (sw ? [['S', 1]] : [['B', 1]]);
+const srcPieces = (sw) => (sw ? [P('B'), P('S')] : [P('B')]);
+
+export function oneLayout(sw = false) {
+  return {
+    w: 100, h: 52,
     elements: {
-      B: { kind: 'battery', a: [14, 46], b: [14, 12], labelAt: [24, 29], labelAlign: 'left' },
-      R1: { kind: 'resistor', a: [38, 12], b: [64, 12], labelSide: 1 },
+      ...leftSource(14, 10, 44, sw, 22),
+      R1: { kind: 'resistor', a: [38, 10], b: [64, 10], labelSide: 1 },
     },
     wires: [
-      W('w1', 'p', [['B', 1]], [14, 12], [38, 12]),
-      W('w2', '0', [['R1', 1]], [64, 12], [86, 12], [86, 46], [14, 46]),
+      W('w1', 'p', topFlow(sw), [14, 10], [38, 10]),
+      W('w2', '0', [['R1', 1]], [64, 10], [86, 10], [86, 44], [14, 44]),
     ],
-    pieces: [P('B'), P('w1'), P('R1'), P('w2')],
+    pieces: [...srcPieces(sw), P('w1'), P('R1'), P('w2')],
   };
 }
 
-export function seriesLayout() {
-  return {
-    w: 100, h: 56,
+/** Series R1 then R2. withR2 = false gives "R1 alone" with identical geometry (for compare). */
+export function seriesLayout(withR2 = true, sw = false) {
+  const L = {
+    w: 100, h: 52,
     elements: {
-      B: { kind: 'battery', a: [14, 46], b: [14, 12], labelAt: [24, 29], labelAlign: 'left' },
-      R1: { kind: 'resistor', a: [28, 12], b: [50, 12], labelSide: 1 },
-      R2: { kind: 'resistor', a: [60, 12], b: [82, 12], labelSide: 1 },
+      ...leftSource(14, 10, 44, sw, 22),
+      R1: { kind: 'resistor', a: [30, 10], b: [52, 10], labelSide: 1 },
     },
-    wires: [
-      W('w1', 'p', [['B', 1]], [14, 12], [28, 12]),
-      W('w2', 'm', [['R1', 1]], [50, 12], [60, 12]),
-      W('w3', '0', [['R2', 1]], [82, 12], [90, 12], [90, 46], [14, 46]),
-    ],
-    pieces: [P('B'), P('w1'), P('R1'), P('w2'), P('R2'), P('w3')],
+    wires: [W('w1', 'p', topFlow(sw), [14, 10], [30, 10])],
   };
+  if (withR2) {
+    L.elements.R2 = { kind: 'resistor', a: [62, 10], b: [84, 10], labelSide: 1 };
+    L.wires.push(
+      W('w2', 'm', [['R1', 1]], [52, 10], [62, 10]),
+      W('w3', '0', [['R2', 1]], [84, 10], [90, 10], [90, 44], [14, 44]),
+    );
+    L.pieces = [...srcPieces(sw), P('w1'), P('R1'), P('w2'), P('R2'), P('w3')];
+  } else {
+    L.wires.push(W('w2', '0', [['R1', 1]], [52, 10], [90, 10], [90, 44], [14, 44]));
+    L.pieces = [...srcPieces(sw), P('w1'), P('R1'), P('w2')];
+  }
+  return L;
 }
 
 /** Parallel as two lanes. withR2 = false gives circuit A (R1 alone) with identical geometry. */
-export function parallelLayout(withR2 = true) {
+export function parallelLayout(withR2 = true, sw = false) {
   const L = {
-    w: 100, h: 62,
+    w: 100, h: 58,
     elements: {
-      B: { kind: 'battery', a: [12, 54], b: [12, 12], labelAt: [21, 44], labelAlign: 'left' },
-      R1: { kind: 'resistor', a: [40, 12], b: [64, 12], labelSide: 1 },
+      ...leftSource(12, 10, 50, sw, 20),
+      R1: { kind: 'resistor', a: [40, 10], b: [64, 10], labelSide: 1 },
     },
-    wires: [W('wA', 'p', [['B', 1]], [12, 12], [30, 12])],
+    wires: [W('wA', 'p', topFlow(sw), [12, 10], [30, 10])],
     junctions: [],
   };
   if (withR2) {
-    L.elements.R2 = { kind: 'resistor', a: [40, 32], b: [64, 32], labelSide: -1 };
+    L.elements.R2 = { kind: 'resistor', a: [40, 30], b: [64, 30], labelSide: -1 };
     L.wires.push(
-      W('wL1', 'p', [['R1', 1]], [30, 12], [40, 12]),
-      W('wL2', 'p', [['R2', 1]], [30, 12], [30, 32], [40, 32]),
-      W('wR1', '0', [['R1', 1]], [64, 12], [76, 12], [76, 32]),
-      W('wR2', '0', [['R2', 1]], [64, 32], [76, 32]),
-      W('wB', '0', [['B', 1]], [76, 32], [76, 54], [12, 54]),
+      W('wL1', 'p', [['R1', 1]], [30, 10], [40, 10]),
+      W('wL2', 'p', [['R2', 1]], [30, 10], [30, 30], [40, 30]),
+      W('wR1', '0', [['R1', 1]], [64, 10], [76, 10], [76, 30]),
+      W('wR2', '0', [['R2', 1]], [64, 30], [76, 30]),
+      W('wB', '0', [['B', 1]], [76, 30], [76, 50], [12, 50]),
     );
-    L.junctions.push({ at: [30, 12], node: 'p' }, { at: [76, 32], node: '0' });
-    L.pieces = [P('B'), P('wA'), P('wL1'), P('R1'), P('wR1'), P('wL2', false, 'ring'), P('R2', false, 'ring'), P('wR2', false, 'ring'), P('wB')];
+    L.junctions.push({ at: [30, 10], node: 'p' }, { at: [76, 30], node: '0' });
+    L.pieces = [...srcPieces(sw), P('wA'), P('wL1'), P('R1'), P('wR1'), P('wL2', false, 'ring'), P('R2', false, 'ring'), P('wR2', false, 'ring'), P('wB')];
   } else {
     L.wires.push(
-      W('wL1', 'p', [['R1', 1]], [30, 12], [40, 12]),
-      W('wR1', '0', [['R1', 1]], [64, 12], [76, 12], [76, 32]),
-      W('wB', '0', [['B', 1]], [76, 32], [76, 54], [12, 54]),
+      W('wL1', 'p', [['R1', 1]], [30, 10], [40, 10]),
+      W('wR1', '0', [['R1', 1]], [64, 10], [76, 10], [76, 30]),
+      W('wB', '0', [['B', 1]], [76, 30], [76, 50], [12, 50]),
     );
-    L.pieces = [P('B'), P('wA'), P('wL1'), P('R1'), P('wR1'), P('wB')];
+    L.pieces = [...srcPieces(sw), P('wA'), P('wL1'), P('R1'), P('wR1'), P('wB')];
   }
   return L;
 }
@@ -94,7 +116,7 @@ export function parallelLayout(withR2 = true) {
  */
 export function combinationLayout(stage = 0) {
   const L = {
-    w: 100, h: 62,
+    w: 100, h: 62, padTop: 44,
     elements: { B: { kind: 'battery', a: [8, 54], b: [8, 12], labelAt: [16, 44], labelAlign: 'left' } },
     wires: [], junctions: [], pieces: [P('B')],
   };
@@ -139,26 +161,26 @@ export function combinationLayout(stage = 0) {
   return L;
 }
 
-export function bulbLayout(bothBulbs = true) {
+export function bulbLayout(bothBulbs = true, sw = false) {
   const L = {
-    w: 100, h: 58,
+    w: 100, h: 54, padTop: 64,
     elements: {
-      B: { kind: 'battery', a: [14, 48], b: [14, 14], labelAt: [24, 31], labelAlign: 'left' },
-      LA: { kind: 'bulb', a: [26, 14], b: [48, 14], labelSide: 1 },
+      ...leftSource(14, 12, 46, sw, 22),
+      LA: { kind: 'bulb', a: [28, 12], b: [50, 12], labelSide: 1 },
     },
     wires: [
-      W('w1', 'p', [['B', 1]], [14, 14], [26, 14]),
-      W('w2', 'm', [['LA', 1]], [48, 14], [60, 14]),
+      W('w1', 'p', topFlow(sw), [14, 12], [28, 12]),
+      W('w2', 'm', [['LA', 1]], [50, 12], [62, 12]),
     ],
   };
   if (bothBulbs) {
-    L.elements.LB = { kind: 'bulb', a: [60, 14], b: [82, 14], labelSide: 1 };
-    L.wires.push(W('w3', '0', [['LB', 1]], [82, 14], [90, 14], [90, 48], [14, 48]));
-    L.pieces = [P('B'), P('w1'), P('LA'), P('w2'), P('LB'), P('w3')];
+    L.elements.LB = { kind: 'bulb', a: [62, 12], b: [84, 12], labelSide: 1 };
+    L.wires.push(W('w3', '0', [['LB', 1]], [84, 12], [90, 12], [90, 46], [14, 46]));
+    L.pieces = [...srcPieces(sw), P('w1'), P('LA'), P('w2'), P('LB'), P('w3')];
   } else {
-    L.elements.W = { kind: 'wire', a: [60, 14], b: [82, 14] };
-    L.wires.push(W('w3', '0', [['W', 1]], [82, 14], [90, 14], [90, 48], [14, 48]));
-    L.pieces = [P('B'), P('w1'), P('LA'), P('w2'), P('W'), P('w3')];
+    L.elements.W = { kind: 'wire', a: [62, 12], b: [84, 12] };
+    L.wires.push(W('w3', '0', [['W', 1]], [84, 12], [90, 12], [90, 46], [14, 46]));
+    L.pieces = [...srcPieces(sw), P('w1'), P('LA'), P('w2'), P('W'), P('w3')];
   }
   return L;
 }
@@ -169,9 +191,9 @@ export function twoBatteryLayout() {
     w: 100, h: 66,
     elements: {
       B1: { kind: 'battery', a: [14, 56], b: [14, 36], labelAt: [5, 46], labelAlign: 'center' },
-      R1: { kind: 'resistor', a: [14, 36], b: [14, 12], labelAt: [24, 24], labelAlign: 'left' },
+      R1: { kind: 'resistor', a: [14, 36], b: [14, 12], labelAt: [5, 24], labelAlign: 'center' },
       R2: { kind: 'resistor', a: [50, 12], b: [50, 56], labelAt: [60, 34], labelAlign: 'left' },
-      R3: { kind: 'resistor', a: [86, 12], b: [86, 36], labelAt: [76, 24], labelAlign: 'right' },
+      R3: { kind: 'resistor', a: [86, 12], b: [86, 36], labelAt: [95, 24], labelAlign: 'center' },
       B2: { kind: 'battery', a: [86, 56], b: [86, 36], labelAt: [95, 46], labelAlign: 'center' },
     },
     wires: [

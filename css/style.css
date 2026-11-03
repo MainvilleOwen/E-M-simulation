@@ -337,3 +337,22 @@ input[type="range"]:focus-visible { outline: 3px solid var(--focus); outline-off
 
 /* ---------- Kitchen sink ---------- */
 .ks-section { display: grid; gap: 12px; margin-bottom: 24px; }
+
+/* ---------- M1 extras ---------- */
+.mode-row { margin: 0 0 12px; }
+.junction-box {
+  background: var(--panel); color: var(--panel-ink); border-radius: var(--radius-sm); padding: 8px 12px;
+  font-variant-numeric: tabular-nums; display: grid; gap: 2px;
+}
+.junction-title { display: flex; align-items: center; gap: 6px; font-weight: 600; flex-wrap: wrap; }
+.junction-box .info-btn { color: var(--panel-muted); }
+.junction-box .info-body { color: var(--panel-ink); background: var(--panel-2); border-color: #2c3750; }
+.reduce-text { margin: 0; min-height: 4.5em; }
+.walk-sum { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.walk-terms { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-variant-numeric: tabular-nums; }
+.walk-terms:empty { display: none; }
+.kcl-note p { margin: 0 0 6px; }
+.kcl-note p:last-child { margin: 0; }
+.bulb-part { margin-bottom: 24px; }
+.bulb-part h2 { margin-top: 8px; }
+.compare-hint { margin: 0; }
