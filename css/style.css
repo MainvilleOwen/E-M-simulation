@@ -470,3 +470,5 @@ body.has-dock .error-banner { bottom: calc(var(--dock-h, 0px) + 12px); }
 .cv-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0 12px; padding: 0 2px; }
 .cv-meta .legend { padding: 0 4px; flex: 1 1 260px; }
 .cv-meta .hm-caption { padding: 0 4px; font-size: 0.9375rem; }
+.switch-list { display: grid; gap: 6px; }
+.switch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

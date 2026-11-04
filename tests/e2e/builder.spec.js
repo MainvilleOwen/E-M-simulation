@@ -20,6 +20,18 @@ test('builder: example runs, place parts, select one and see its graphs', async 
   await expect(page.locator('.inspector .readout', { hasText: 'Charge q' })).toBeVisible();
   await sweepAll(page, page.locator('.inspector'), 'inspector');
   await shot(page, 'builder', 'selected-capacitor', testInfo);
+  // Switches: the Run card button and tapping the switch both flip it
+  await expect(page.locator('.switch-row')).toContainText('closed');
+  await page.locator('.switch-toggle').first().click();
+  await expect(page.locator('.switch-row')).toContainText('open');
+  p = await gridPoint(page, 3, 1);
+  await page.locator('.seg', { hasText: 'Select' }).click();
+  await page.mouse.click(p.x, p.y);
+  await expect(page.locator('.switch-row')).toContainText('closed');
+  await expect(page.locator('.inspector-switch')).toHaveText('Open the switch');
+  await page.locator('.inspector-switch').click();
+  await expect(page.locator('.switch-row')).toContainText('open');
+  await page.locator('.inspector-switch').click();
   // Place a resistor by tapping two points
   await page.locator('.seg', { hasText: 'Resistor' }).click();
   p = await gridPoint(page, 1, 5); await page.mouse.click(p.x, p.y);

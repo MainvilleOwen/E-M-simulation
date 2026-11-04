@@ -101,7 +101,7 @@ function toLayout(parts, circuit) {
 export function mount(root, life) {
   root.append(
     h('header', { class: 'module-head' }, h('h1', {}, 'Circuit builder'),
-      h('p', {}, 'Build any circuit. Pick a part, then tap two grid points in the same row or column (or drag between them). Tap a part with Select to see its voltage and current.')));
+      h('p', {}, 'Build any circuit. Pick a part, then tap two grid points in the same row or column (or drag between them). Tap a part with Select to see its voltage and current; tapping a switch opens or closes it.')));
   const { sim, ctrl } = viewBody(root);
   let parts = loadParts();
   let selected = null;
@@ -144,7 +144,27 @@ export function mount(root, life) {
   const clockNote = h('p', { class: 'small muted' });
   const buildCard = ctrlCard(ctrl, 'Build', toolSeg.el, h('div', { class: 'btn-row' }, exampleBtn, clearBtn));
   placeResponsive(buildCard, { wideParent: ctrl, narrowParent: sim, narrowAfter: warn }, life);
-  ctrlCard(ctrl, 'Run', tc.el, clockNote);
+  const switchList = h('div', { class: 'switch-list' });
+  ctrlCard(ctrl, 'Run', tc.el, clockNote, switchList);
+
+  function toggleSwitch(p) {
+    p.closed = !p.closed;
+    rebuild(true);
+  }
+
+  /** One Open/Close button per switch, so any switch can be flipped without hunting for it. */
+  function renderSwitches() {
+    const sws = parts.filter((p) => p.kind === 'switch');
+    switchList.replaceChildren();
+    if (!sws.length) return;
+    switchList.appendChild(h('div', { class: 'control-label' }, 'Switches (or tap a switch on the circuit)'));
+    for (const p of sws) {
+      switchList.appendChild(h('div', { class: 'switch-row' },
+        h('span', {}, `${p.id}: ${p.closed ? 'closed' : 'open'}`),
+        h('button', { type: 'button', class: `btn ${p.closed ? '' : 'btn-primary'} switch-toggle`, data: { id: p.id }, on: { click: () => toggleSwitch(p) } },
+          p.closed ? 'Open it' : 'Close it')));
+    }
+  }
 
   // Inspector for the selected part
   const inspector = ctrlCard(ctrl, 'Selected part');
@@ -172,7 +192,7 @@ export function mount(root, life) {
     }
     const row = h('div', { class: 'btn-row' });
     if (p.kind === 'battery') row.appendChild(h('button', { type: 'button', class: 'btn', on: { click: () => { [p.a, p.b] = [p.b, p.a]; rebuild(true); } } }, 'Flip + and −'));
-    if (p.kind === 'switch') row.appendChild(h('button', { type: 'button', class: 'btn btn-primary', on: { click: () => { p.closed = !p.closed; rebuild(true); renderInspector(); } } }, p.closed ? 'Open the switch' : 'Close the switch'));
+    if (p.kind === 'switch') row.appendChild(h('button', { type: 'button', class: 'btn btn-primary inspector-switch', on: { click: () => toggleSwitch(p) } }, p.closed ? 'Open the switch' : 'Close the switch'));
     if (p.kind === 'capacitor') row.appendChild(h('button', { type: 'button', class: 'btn', on: { click: () => { charges[p.id] = 0; rebuild(true); } } }, 'Discharge it'));
     row.appendChild(h('button', { type: 'button', class: 'btn btn-ghost', on: { click: () => { parts = parts.filter((x) => x !== p); selected = null; rebuild(); } } }, 'Delete'));
     insBody.appendChild(row);
@@ -197,9 +217,10 @@ export function mount(root, life) {
     const labels = {};
     for (const p of parts) {
       if (p.kind === 'wire') continue;
-      labels[p.id] = p.kind === 'switch' ? (p.closed ? 'closed' : 'open') : f(p.value, KINDS[p.kind].unit);
+      labels[p.id] = p.kind === 'switch' ? `${p.id} ${p.closed ? 'closed' : 'open'}` : f(p.value, KINDS[p.kind].unit);
     }
     view.set({ labels, highlight: new Set(selected ? [selected] : []) });
+    renderSwitches();
     if (!parts.length) {
       view.setSolution(null);
       view.schem.showProblem('Add parts to start: pick a tool, then tap two grid points.');
@@ -287,6 +308,7 @@ export function mount(root, life) {
       const p = partHit(x, y);
       if (tool === 'delete' && p) { parts = parts.filter((q) => q !== p); if (selected === p.id) selected = null; rebuild(); return; }
       selected = p ? p.id : null;
+      if (p && p.kind === 'switch' && tool === 'select') { toggleSwitch(p); return; } // tap a switch to flip it
       view.set({ highlight: new Set(selected ? [selected] : []) });
       renderInspector();
       return;
