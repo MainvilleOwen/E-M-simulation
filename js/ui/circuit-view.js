@@ -116,8 +116,16 @@ export class CircuitView {
     const padTop = this.layout.padTop || 44;
     const padBottom = this.layout.padBottom || 12;
     const scale = Math.max(0.01, Math.min((W - padL - padR) / b.w, (H - padTop - padBottom) / b.h));
-    const ox = padL + (W - padL - padR - b.w * scale) / 2 - b.x * scale;
-    const oy = padTop + (H - padTop - padBottom - b.h * scale) / 2 - b.y * scale;
+    let ox = padL + (W - padL - padR - b.w * scale) / 2 - b.x * scale;
+    let oy = padTop + (H - padTop - padBottom - b.h * scale) / 2 - b.y * scale;
+    let sc = scale;
+    // Optional pan and zoom (screen = z · fitted + pan), used by the circuit builder
+    const zm = this.zoom;
+    if (zm && (zm.z !== 1 || zm.x || zm.y)) { sc = scale * zm.z; ox = ox * zm.z + zm.x; oy = oy * zm.z + zm.y; }
+    return this._t(sc, ox, oy);
+  }
+
+  _t(scale, ox, oy) {
     return { scale, ox, oy, x: (x) => ox + x * scale, y: (y) => oy + y * scale, p: (pt) => [ox + pt[0] * scale, oy + pt[1] * scale] };
   }
 

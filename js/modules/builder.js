@@ -18,7 +18,7 @@ const gx = (c) => 6 + c * G;
 const gy = (r) => 6 + r * G;
 const BOX = { x: 0, y: 0, w: gx(COLS - 1) + 6, h: gy(ROWS - 1) + 6 };
 const WIRE_R = 1e-3;     // an ideal wire, as a tiny resistance so its current is known
-const GMIN_R = 1e9;      // a huge resistance from every node to ground, so nothing floats
+const TIE_R = 1e3;       // single tie from a disconnected island to ground (carries no current)
 const STORE = 'emlab.builder.v2';
 const HIST = 600;
 
@@ -76,7 +76,26 @@ function toCircuit(parts, charges) {
     else if (p.kind === 'switch') elements.push({ type: 'S', id: p.id, a, b, closed: !!p.closed });
   }
   ground = ground || [...used][0] || 'n0_0';
-  for (const n of used) if (n !== ground) elements.push({ type: 'R', id: `__g_${n}`, a: n, b: ground, R: GMIN_R });
+  // Parts that are not connected to the rest (or sit beyond an open switch) form islands. Tie each island
+  // to ground at exactly one point: with only one connection no current can flow through the tie, so it
+  // changes nothing physically, but it gives every node a defined potential.
+  const parent = new Map([...used].map((n) => [n, n]));
+  const find = (x) => { while (parent.get(x) !== x) x = parent.get(x); return x; };
+  for (const e of elements) {
+    if (e.type === 'S' && !e.closed) continue;
+    const a = e.type === 'V' ? e.neg : e.a;
+    const b = e.type === 'V' ? e.pos : e.b;
+    const ra = find(a); const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  }
+  const g = find(ground);
+  const tied = new Set();
+  for (const n of used) {
+    const r = find(n);
+    if (r === g || tied.has(r)) continue;
+    tied.add(r);
+    elements.push({ type: 'R', id: `__tie_${n}`, a: n, b: ground, R: TIE_R });
+  }
   return { ground, elements };
 }
 
@@ -101,7 +120,7 @@ function toLayout(parts, circuit) {
 export function mount(root, life) {
   root.append(
     h('header', { class: 'module-head' }, h('h1', {}, 'Circuit builder'),
-      h('p', {}, 'Build any circuit. Pick a part, then tap two grid points in the same row or column (or drag between them). With Select: tap a part to see its graphs, drag it to move it, tap a switch to open or close it. Delete removes a part (or press Delete).')));
+      h('p', {}, 'Build any circuit. Pick a part, then tap two grid points in the same row or column (or drag between them). With Select: tap a part to see its graphs, drag it to move it, tap a switch to open or close it. Delete removes a part (or press Delete). Pinch or scroll to zoom; drag empty space (or use two fingers) to pan.')));
   const { sim, ctrl } = viewBody(root);
   let parts = loadParts();
   let selected = null;
@@ -113,6 +132,7 @@ export function mount(root, life) {
   let tBase = 0;        // sim time carried across rebuilds, so edits never restart the clock
   let shortWarned = false;
   let drag = null;      // moving a part: { p, start, dc, dr }
+  let wantPlay = true;  // only the Play/Pause button changes this; edits never start or stop the sim
 
   const scales = { vMin: 0, vMax: 10, dotK: 10, vmax: 60, pushPerVolt: 1.2, pRef: 2, qPerMark: 1e-4, maxMarks: 14 };
   const view = new CircuitView(sim, life, {
@@ -142,24 +162,40 @@ export function mount(root, life) {
   exampleBtn.addEventListener('click', () => { parts = EXAMPLE.map((x) => ({ ...x, id: newId(x.kind) })); selected = null; charges = {}; rebuild(); });
   const runner = new TransientRunner({ timeScale: 1 });
   const tc = timeControls({
-    onPlay: () => { runner.playing = true; },
-    onPause: () => { runner.playing = false; },
+    onPlay: () => { wantPlay = true; runner.playing = true; },
+    onPause: () => { wantPlay = false; runner.playing = false; },
     onReset: () => { charges = {}; history = new Map(); tBase = 0; if (runner.sim) runner.sim = null; rebuild(); },
     onSpeed: (v) => { runner.speed = v; },
   });
   const clockNote = h('p', { class: 'small muted' });
   const delBtn = h('button', { type: 'button', class: 'btn builder-delete', disabled: true }, 'Delete selected');
+  view.zoom = { z: 1, x: 0, y: 0 };
+  const ZMIN = 0.6;
+  const ZMAX = 5;
+  /** Zoom by factor k about canvas point (sx, sy), keeping the point under it fixed. */
+  const zoomAt = (k, sx, sy) => {
+    const zm = view.zoom;
+    const z2 = Math.max(ZMIN, Math.min(ZMAX, zm.z * k));
+    zm.x = sx - (z2 / zm.z) * (sx - zm.x);
+    zm.y = sy - (z2 / zm.z) * (sy - zm.y);
+    zm.z = z2;
+  };
+  const zoomIn = h('button', { type: 'button', class: 'btn zoom-in', 'aria-label': 'Zoom in' }, '+');
+  const zoomOut = h('button', { type: 'button', class: 'btn zoom-out', 'aria-label': 'Zoom out' }, '−');
+  const zoomFit = h('button', { type: 'button', class: 'btn zoom-fit' }, 'Fit');
+  zoomIn.addEventListener('click', () => zoomAt(1.4, view.schem.w / 2, view.schem.h / 2));
+  zoomOut.addEventListener('click', () => zoomAt(1 / 1.4, view.schem.w / 2, view.schem.h / 2));
+  zoomFit.addEventListener('click', () => { view.zoom = { z: 1, x: 0, y: 0 }; });
+  const zoomRow = h('div', { class: 'btn-row zoom-row' }, h('span', { class: 'control-label' }, 'View'), zoomOut, zoomIn, zoomFit);
   delBtn.addEventListener('click', () => deleteSelected());
-  const buildCard = ctrlCard(ctrl, 'Build', toolSeg.el, h('div', { class: 'btn-row' }, delBtn, exampleBtn, clearBtn));
+  const buildCard = ctrlCard(ctrl, 'Build', toolSeg.el, h('div', { class: 'btn-row' }, delBtn, exampleBtn, clearBtn), zoomRow);
   placeResponsive(buildCard, { wideParent: ctrl, narrowParent: sim, narrowAfter: warn }, life);
   const switchList = h('div', { class: 'switch-list' });
   ctrlCard(ctrl, 'Run', tc.el, clockNote, switchList);
 
   function toggleSwitch(p) {
     p.closed = !p.closed;
-    updateValues();
-    renderSwitches();
-    if (selected === p.id) renderInspector();
+    rebuild(true); // opening a switch can cut part of the circuit off, so rebuild (clock, charges and pause carry over)
   }
 
   /** Apply value changes (R, ε, C, switch state) to the running sim without restarting it. */
@@ -282,12 +318,11 @@ export function mount(root, life) {
       renderInspector();
       return;
     }
-    const wasPlaying = runner.sim ? runner.playing : true;
     if (runner.sim) tBase += runner.sim.t;
     runner.load(circuit);
     pace();
-    runner.playing = wasPlaying;
-    tc.setPlaying(wasPlaying);
+    runner.playing = wantPlay;
+    tc.setPlaying(wantPlay);
     shortWarned = false;
     // Scales for this circuit: colour range from the batteries, dot speed from the biggest current now
     const st = runner.state;
@@ -345,24 +380,59 @@ export function mount(root, life) {
     return true;
   };
   let down = null;
+  const touches = new Map(); // pointerId → {x, y}
+  let pinch = null;          // { d, mx, my }
+  let pan = null;            // { x, y, moved }
   life.on(view.schem.canvas, 'pointerdown', (ev) => {
     const { x, y } = view.schem.local(ev);
+    view.schem.canvas.setPointerCapture(ev.pointerId);
+    touches.set(ev.pointerId, { x, y });
+    if (touches.size === 2) {
+      // Two fingers: pinch to zoom and drag to pan. Cancel anything one finger started.
+      const [a, b] = [...touches.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+      down = null; drag = null; pan = null; pending = null;
+      return;
+    }
     down = { x, y, g: gridHit(x, y) };
     if (tool === 'select') {
       const p = partHit(x, y);
-      if (p) { drag = { p, x, y, dc: 0, dr: 0 }; view.schem.canvas.setPointerCapture(ev.pointerId); }
+      if (p) drag = { p, x, y, dc: 0, dr: 0 };
+      else pan = { x, y, moved: false };
     }
   });
   life.on(view.schem.canvas, 'pointermove', (ev) => {
-    if (!drag) return;
     const { x, y } = view.schem.local(ev);
+    if (touches.has(ev.pointerId)) touches.set(ev.pointerId, { x, y });
+    if (pinch && touches.size >= 2) {
+      const [a, b] = [...touches.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const mx = (a.x + b.x) / 2;
+      const my = (a.y + b.y) / 2;
+      view.zoom.x += mx - pinch.mx;
+      view.zoom.y += my - pinch.my;
+      zoomAt(d / pinch.d, mx, my);
+      pinch = { d, mx, my };
+      return;
+    }
+    if (pan) {
+      if (Math.hypot(x - pan.x, y - pan.y) > 4) pan.moved = true;
+      if (pan.moved) { view.zoom.x += x - pan.x; view.zoom.y += y - pan.y; pan.x = x; pan.y = y; }
+      return;
+    }
+    if (!drag) return;
     const step = G * view.transform().scale;
     const dc = Math.round((x - drag.x) / step);
     const dr = Math.round((y - drag.y) / step);
     const fits = [drag.p.a, drag.p.b].every(([c, r]) => c + dc >= 0 && c + dc < COLS && r + dr >= 0 && r + dr < ROWS);
     if (fits) { drag.dc = dc; drag.dr = dr; }
   });
-  life.on(view.schem.canvas, 'pointercancel', () => { drag = null; down = null; });
+  life.on(view.schem.canvas, 'pointercancel', (ev) => { touches.delete(ev.pointerId); drag = null; down = null; pan = null; if (touches.size < 2) pinch = null; });
+  life.on(view.schem.canvas, 'wheel', (ev) => {
+    ev.preventDefault();
+    const { x, y } = view.schem.local(ev);
+    zoomAt(Math.exp(-ev.deltaY * 0.0015), x, y);
+  }, { passive: false });
   life.on(document, 'keydown', (ev) => {
     if (!(ev.key === 'Delete' || ev.key === 'Backspace') || !selected) return;
     if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
@@ -370,6 +440,10 @@ export function mount(root, life) {
     deleteSelected();
   });
   life.on(view.schem.canvas, 'pointerup', (ev) => {
+    touches.delete(ev.pointerId);
+    if (pinch) { if (touches.size < 2) pinch = null; return; }
+    if (pan && pan.moved) { pan = null; down = null; return; }
+    pan = null;
     if (!down) return;
     const { x, y } = view.schem.local(ev);
     const g = gridHit(x, y);

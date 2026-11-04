@@ -77,3 +77,42 @@ test('builder: example runs, place parts, select one and see its graphs', async 
   await expectNoBadText(page, 'builder');
   expect(errors).toEqual([]);
 });
+
+test('builder: edits keep a paused circuit paused; pan and zoom work', async ({ page }) => {
+  const errors = trackErrors(page);
+  await page.addInitScript(() => { try { localStorage.removeItem('emlab.builder.v2'); } catch { /* */ } });
+  await gotoApp(page, '#/builder');
+  await page.waitForTimeout(600);
+  const clock = async () => (await page.locator('.tc-clock').innerText());
+  await page.locator('.tc-play').click(); // pause
+  await expect(page.locator('.tc-play')).toHaveText('Play');
+  const t0 = await clock();
+  // Place a resistor and change a value while paused
+  await page.locator('.seg', { hasText: 'Resistor' }).click();
+  let p = await gridPoint(page, 1, 5); await page.mouse.click(p.x, p.y);
+  p = await gridPoint(page, 4, 5); await page.mouse.click(p.x, p.y);
+  await page.locator('.inspector input[type="range"]').first().evaluate((el) => { el.value = String(Number(el.max) / 3); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForTimeout(500);
+  await expect(page.locator('.tc-play')).toHaveText('Play');
+  expect(await clock()).toBe(t0);
+  await page.locator('.tc-play').click(); // play
+  await page.waitForTimeout(500);
+  expect(await clock()).not.toBe(t0);
+  // Zoom in with the button: grid points spread apart, taps still select the right part
+  const a = await gridPoint(page, 0, 0); const b = await gridPoint(page, 1, 0);
+  await page.locator('.zoom-in').click();
+  const a2 = await gridPoint(page, 0, 0); const b2 = await gridPoint(page, 1, 0);
+  expect(b2.x - a2.x).toBeGreaterThan((b.x - a.x) * 1.3);
+  await page.locator('.seg', { hasText: 'Select' }).click();
+  p = await gridPoint(page, 7, 2.5); await page.mouse.click(p.x, p.y);
+  await expect(page.locator('.inspector')).toContainText('Capacitor');
+  // Pan by dragging empty space, then Fit resets
+  const e = await gridPoint(page, 2, 3);
+  await page.mouse.move(e.x, e.y); await page.mouse.down(); await page.mouse.move(e.x + 40, e.y + 20, { steps: 5 }); await page.mouse.up();
+  const e2 = await gridPoint(page, 2, 3);
+  expect(Math.round(e2.x - e.x)).toBe(40);
+  await page.locator('.zoom-fit').click();
+  const a3 = await gridPoint(page, 0, 0);
+  expect(Math.abs(a3.x - a.x)).toBeLessThan(1);
+  expect(errors).toEqual([]);
+});
