@@ -1,6 +1,7 @@
 // Schematic renderer: wires tinted by potential, element symbols, push arrows, bulbs, plate charges.
 // Layout coordinates are logical units; T (from fitTransform) maps them to canvas px.
 import { colorForV, COLORS, rgba } from './colors.js';
+import { drawDot } from './dots.js';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -218,6 +219,17 @@ export function drawSchematic(ctx, T, layout, sol, o = {}) {
   if (o.dots) {
     o.dots.draw(ctx, T, { radius: clamp(unit * 0.85, 3, 5), alpha: o.alpha, styles: o.dotStyles });
   }
+  // Charge piled up on capacitor plates (from the solver's q): densest at the plate, thinning along the wire
+  if (sol && sol.q && o.qPerMark) {
+    for (const [id, el] of Object.entries(layout.elements || {})) {
+      if (el.kind !== 'capacitor') continue;
+      const a = alphaOf(id);
+      if (a <= 0.01) continue;
+      ctx.globalAlpha = a;
+      drawPile(ctx, T, layout, el, sol.q[id] || 0, o.qPerMark, (o.maxMarks || 12) * 3, clamp(unit * 0.85, 3, 5));
+    }
+    ctx.globalAlpha = 1;
+  }
 
   // Assumed current directions (Kirchhoff)
   for (const as of o.assumed || []) {
@@ -394,29 +406,6 @@ function drawCapacitor(ctx, g, unit, ww, ca, cb, q, qPerMark, maxMarks = 12, pla
   ctx.strokeStyle = cb;
   line(ctx, [p1[0] - g.n[0] * ph, p1[1] - g.n[1] * ph], [p1[0] + g.n[0] * ph, p1[1] + g.n[1] * ph]);
   ctx.lineCap = 'round';
-  // Charge marks: + on the positive plate, − on the negative plate, count ∝ |q|
-  const marks = Math.min(maxMarks, Math.round(Math.abs(q) / qPerMark));
-  if (marks > 0 && Number.isFinite(marks)) {
-    const posPlate = q > 0 ? p0 : p1;
-    const negPlate = q > 0 ? p1 : p0;
-    const inward = q > 0 ? 1 : -1; // from plate a toward plate b
-    const m = Math.min(clamp(unit * 0.9, 3, 5), (ph * 0.85) / Math.max(1, marks - 1) * 0.45 + 1.5);
-    for (let k = 0; k < marks; k++) {
-      const f = marks === 1 ? 0 : -1 + (2 * k) / (marks - 1);
-      const along = f * ph * 0.85;
-      // + marks just inside the positive plate
-      const px = posPlate[0] + g.n[0] * along + g.u[0] * inward * (m + 3);
-      const py = posPlate[1] + g.n[1] * along + g.u[1] * inward * (m + 3);
-      ctx.strokeStyle = COLORS.pos;
-      ctx.lineWidth = 2;
-      line(ctx, [px - m, py], [px + m, py]);
-      line(ctx, [px, py - m], [px, py + m]);
-      const nx = negPlate[0] + g.n[0] * along - g.u[0] * inward * (m + 3);
-      const ny = negPlate[1] + g.n[1] * along - g.u[1] * inward * (m + 3);
-      ctx.strokeStyle = COLORS.neg;
-      line(ctx, [nx - m, ny], [nx + m, ny]);
-    }
-  }
 }
 
 function drawSwitch(ctx, g, unit, ww, ca, cb, closed) {
@@ -437,4 +426,57 @@ function drawSwitch(ctx, g, unit, ww, ca, cb, closed) {
     ctx.fillStyle = '#e8ecf4';
     ctx.fill();
   }
+}
+
+/** Positive charge piled on a capacitor plate: dots on the plate face, then trailing back along its wire. */
+function drawPile(ctx, T, layout, el, q, qPerDot, maxPile, r) {
+  const n = Math.min(maxPile, Math.round(Math.abs(q) / qPerDot));
+  if (!(n > 0)) return;
+  const g = geom(T, el);
+  const half = bodyHalf('capacitor', g.L, T.scale);
+  const posA = q > 0;
+  const term = posA ? el.a : el.b;
+  const dir = posA ? -1 : 1; // from the plate toward its terminal
+  const plate = [g.M[0] + g.u[0] * half * dir, g.M[1] + g.u[1] * half * dir];
+  // Path: plate → terminal → along the wire attached there
+  const path = [plate, T.p(term)];
+  const same = (p) => Math.abs(p[0] - term[0]) < 1e-6 && Math.abs(p[1] - term[1]) < 1e-6;
+  for (const w of layout.wires || []) {
+    if (same(w.pts[0])) { for (let i = 1; i < w.pts.length; i++) path.push(T.p(w.pts[i])); break; }
+    if (same(w.pts[w.pts.length - 1])) { for (let i = w.pts.length - 2; i >= 0; i--) path.push(T.p(w.pts[i])); break; }
+  }
+  const cum = [0];
+  for (let i = 1; i < path.length; i++) cum.push(cum[i - 1] + Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]));
+  const at = (d) => {
+    for (let i = 1; i < path.length; i++) {
+      if (d <= cum[i] || i === path.length - 1) {
+        const seg = cum[i] - cum[i - 1] || 1;
+        const f = Math.min(1, (d - cum[i - 1]) / seg);
+        const ux = (path[i][0] - path[i - 1][0]) / seg;
+        const uy = (path[i][1] - path[i - 1][1]) / seg;
+        return [path[i - 1][0] + ux * seg * f, path[i - 1][1] + uy * seg * f, ux, uy];
+      }
+    }
+    return [...path[path.length - 1], 0, 0];
+  };
+  const ph = clamp(T.scale * 4.8, 14, 28) * (el.plateScale || 1);
+  const onPlate = Math.min(n, Math.max(3, Math.floor((2 * ph) / (2.4 * r))));
+  ctx.save();
+  // On the plate face
+  for (let k = 0; k < onPlate; k++) {
+    const f = onPlate === 1 ? 0 : -1 + (2 * k) / (onPlate - 1);
+    const x = plate[0] + g.n[0] * f * ph * 0.9 + g.u[0] * dir * (r + 2);
+    const y = plate[1] + g.n[1] * f * ph * 0.9 + g.u[1] * dir * (r + 2);
+    drawDot(ctx, x, y, r);
+  }
+  // Along the wire, spacing growing with distance (density falls off away from the plate)
+  const rest = n - onPlate;
+  const Lmax = Math.min(cum[cum.length - 1], 26 * T.scale);
+  for (let k = 0; k < rest; k++) {
+    const d = r * 3 + (Lmax - r * 3) * ((k + 1) / rest) ** 1.8;
+    const [x, y, ux, uy] = at(d);
+    const side = (k % 2 ? 1 : -1) * r * 0.9 * (1 - (k + 1) / (rest + 1));
+    drawDot(ctx, x - uy * side, y + ux * side, r);
+  }
+  ctx.restore();
 }

@@ -44,7 +44,7 @@ const xOf = (p, f) => p.xa + (p.xb - p.xa) * f;
 export function drawHeightMap(ctx, W, H, layout, sol, o = {}) {
   const { vMin = 0, vMax = 1, pieces = [] } = o;
   const top = o.padTop != null ? o.padTop : 16;
-  const bottom = o.padBottom != null ? o.padBottom : 24;
+  const bottom = o.padBottom != null ? o.padBottom : 30;
   const span = vMax - vMin || 1;
   const y = (V) => top + ((vMax - V) / span) * (H - top - bottom);
   const base = y(vMin);
@@ -75,7 +75,7 @@ export function drawHeightMap(ctx, W, H, layout, sol, o = {}) {
   for (const it of items) {
     const { p, info } = it;
     const openSwitch = info.kind === 'switch' && !(info.el && info.el.ref && info.el.ref.closed);
-    if (info.kind === 'battery' || info.kind === 'capacitor' || openSwitch || p.dotStyle === 'ring') continue;
+    if (info.kind === 'battery' || info.kind === 'capacitor' || openSwitch || p.dotStyle === 'ring' || p.off) continue;
     if (alphaOf(p.id) <= 0.01) continue;
     const fs4 = info.kind === 'wire' ? [0, 1] : [0, p.f0, p.f1, 1];
     ctx.beginPath();
@@ -104,6 +104,16 @@ export function drawHeightMap(ctx, W, H, layout, sol, o = {}) {
       if (info.kind !== 'wire') { ctx.lineTo(xOf(p, p.f0), y(va)); ctx.lineTo(xOf(p, p.f1), y(vb)); }
       ctx.lineTo(xOf(p, 1), y(vb));
       ctx.stroke();
+    }
+    if (info.kind === 'wire' && p.off) {
+      // Return lane: a thin dashed line just below the floor (still the same potential)
+      ctx.save();
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = ca; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p.span[0], y(va) + p.off); ctx.lineTo(p.span[1], y(va) + p.off); ctx.stroke();
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      continue;
     }
     if (info.kind === 'wire') {
       if (p.span) flat(ctx, p.span[0], p.span[1], y(va), ca);
@@ -165,7 +175,7 @@ export function drawHeightMap(ctx, W, H, layout, sol, o = {}) {
       ctx.globalAlpha = a;
       o.dots.eachDot(p.id, (f, pt) => {
         const xx = p.side && o.xOfPoint ? o.xOfPoint(pt) : xOf(p, f);
-        drawDot(ctx, xx, y(V(it, f)), r, p.dotStyle);
+        drawDot(ctx, xx, y(V(it, f)) + (p.off || 0), r * (p.off ? 0.8 : 1), p.dotStyle);
       });
     }
     ctx.globalAlpha = 1;

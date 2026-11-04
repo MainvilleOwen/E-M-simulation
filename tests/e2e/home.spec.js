@@ -29,7 +29,7 @@ test('first visit shows the intro once; it can be reopened', async ({ page }, te
 test('home cards open each module', async ({ page }, testInfo) => {
   const errors = trackErrors(page);
   await gotoApp(page, '#/');
-  await expect(page.locator('.home-card')).toHaveCount(4);
+  await expect(page.locator('.home-card')).toHaveCount(5);
   await shot(page, 'phase7', 'home', testInfo);
   for (const r of ['circuits', 'rc', 'capacitors', 'fields']) {
     await page.locator(`.home-card[data-route="${r}"]`).click();

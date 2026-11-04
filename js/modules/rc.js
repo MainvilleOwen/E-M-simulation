@@ -75,7 +75,7 @@ function mountLab(container, life, mode) {
     ? 'Press <strong>Play</strong> to close the switch. Charge piles up on the plates, the capacitor’s step on the height map rises, and it pushes back against the battery. The net push shrinks, so the dots slow down.'
     : 'The capacitor starts full. Press <strong>Play</strong> to flip the switch: the battery leaves the loop and the capacitor pushes charge back around through R. As it empties, its push shrinks, so the dots slow down.');
   const s = { R: RANGES.rcR.value, C: RANGES.rcC.value };
-  const scales = { vMin: 0, vMax: EMF, dotK: 40000, vmax: 80, pushPerVolt: 1.6, qPerMark: 0.3e-3, maxMarks: 16 };
+  const scales = { vMin: 0, vMax: EMF, dotK: 40000, vmax: 80, pushPerVolt: 1.6, qPerMark: 0.06e-3, maxMarks: 16 };
   const layout = rcLayout();
   // Discharging: the battery is out of the loop, so the height map follows only the capacitor loop.
   const pieces = charge ? layout.pieces : layout.pieces.filter((p) => !['B', 'wP', 'Sc', 'wG2'].includes(p.id))
@@ -336,7 +336,7 @@ function makeRcSolveCtx(sim, life) {
       const layout = k === 'ex1' ? rcExample1Layout() : rcExample2Layout();
       const qMaxGuess = k === 'ex1' ? p.C * p.emf : p.C * p.emf;
       const I0 = k === 'ex1' ? p.emf / p.R1 + p.emf / p.R2 : p.emf / (p.R2 + p.R3);
-      const scales = { vMin: 0, vMax: p.emf, dotK: 25 / I0, vmax: 80, pushPerVolt: 16 / p.emf, qPerMark: qMaxGuess / 8, maxMarks: 12 };
+      const scales = { vMin: 0, vMax: p.emf, dotK: 25 / I0, vmax: 80, pushPerVolt: 16 / p.emf, qPerMark: qMaxGuess / 30, maxMarks: 12 };
       view = new CircuitView(holder, viewLife, { layout, pieces: layout.pieces, scales, dotsNote: true, hmMin: 140 });
       const tauRef = k === 'ex1' ? rcEx1Numbers(p).tauBefore : rcEx2Numbers(p).tau;
       const timeScale = tauRef / 3; // τ shows as about 3 s on screen

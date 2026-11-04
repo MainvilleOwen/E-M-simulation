@@ -9,6 +9,7 @@ const loaders = {
   rc: () => import('./modules/rc.js'),
   capacitors: () => import('./modules/capacitors.js'),
   fields: () => import('./modules/fields.js'),
+  builder: () => import('./modules/builder.js'),
   'kitchen-sink': () => import('./modules/kitchen-sink.js'),
 };
 
@@ -18,6 +19,7 @@ const TITLES = {
   rc: 'RC circuits · E&M Lab',
   capacitors: 'Capacitors · E&M Lab',
   fields: 'Fields · E&M Lab',
+  builder: 'Circuit builder · E&M Lab',
   'kitchen-sink': 'Kitchen sink · E&M Lab',
 };
 
@@ -105,6 +107,8 @@ function onHashChange() {
 
 // Errors anywhere show a calm banner rather than breaking the page silently.
 window.onerror = (message, source, line, col, err) => {
+  // A harmless browser notice when a resize causes another resize; not an app error.
+  if (/ResizeObserver loop/.test(String(message))) return true;
   console.warn('Unhandled error:', err || message);
   showErrorBanner();
   return true;

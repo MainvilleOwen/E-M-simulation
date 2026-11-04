@@ -26,6 +26,12 @@ const CARDS = [
     detail: 'Drag charges, probe the field, and release a dipole in a uniform field.',
     icon: '<circle cx="26" cy="20" r="7" class="pos"/><circle cx="62" cy="20" r="7" class="neg"/><path d="M33 20 H55" /><path d="M30 13 C 40 2, 48 2, 58 13" /><path d="M30 27 C 40 38, 48 38, 58 27" />',
   },
+  {
+    route: 'builder', title: 'Circuit builder',
+    question: 'What happens in a circuit you design yourself?',
+    detail: 'Place batteries, resistors, bulbs, capacitors and switches; tap any part for its voltage and current over time.',
+    icon: '<path d="M10 30 V10 H40" /><path d="M40 10 h6 l3 -5 l5 10 l5 -10 l3 5 h6" /><path d="M68 10 H80 V30 H10" /><circle cx="10" cy="10" r="2" class="dot"/><circle cx="80" cy="30" r="2" class="dot"/>',
+  },
 ];
 
 export function mount(root, life) {

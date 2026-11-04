@@ -93,15 +93,7 @@ export class CircuitView {
   setLayout(layout, pieces) {
     this.layout = layout;
     this.pieces = pieces || [];
-    const old = this.dots;
     this.dots = new DotSystem(layout, { spacing: this.o.spacing || 5 });
-    if (old) {
-      // Keep phases for tracks that persist, so dots do not jump
-      for (const t of this.dots.tracks) {
-        const prev = old.byId.get(t.id);
-        if (prev && prev.sp) t.phase = (prev.phase / prev.sp) * t.sp;
-      }
-    }
     this.schem.dirty = true;
   }
 
@@ -188,7 +180,10 @@ export class CircuitView {
         a = w.pts[0]; b = w.pts[w.pts.length - 1];
         if (p.x0 == null) {
           const xs = w.pts.map((pt) => T.x(pt[0]));
-          return { ...p, side: true, xa: T.x(a[0]), xb: T.x(b[0]), f0, f1, span: [Math.min(...xs), Math.max(...xs)] };
+          // Wires that run back right-to-left (the return path) get their own lane just under the floor,
+          // so their dots do not sit on top of the ladder and ramp ends.
+          const back = T.x(b[0]) < T.x(a[0]) - 1;
+          return { ...p, side: true, xa: T.x(a[0]), xb: T.x(b[0]), f0, f1, span: [Math.min(...xs), Math.max(...xs)], off: back ? 10 : 0 };
         }
       }
       if (p.x0 != null) {

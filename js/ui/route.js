@@ -1,6 +1,6 @@
 // Pure hash-route parsing. No DOM access, so it can be unit tested.
 
-export const MODULE_ROUTES = ['circuits', 'rc', 'capacitors', 'fields'];
+export const MODULE_ROUTES = ['circuits', 'rc', 'capacitors', 'fields', 'builder'];
 export const HIDDEN_ROUTES = ['kitchen-sink'];
 
 /**

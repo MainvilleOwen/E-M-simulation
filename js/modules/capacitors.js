@@ -424,7 +424,7 @@ function renderCombo(host, life, kind, s) {
   const layout = series ? capSeriesLayout() : capParallelLayout();
   const build = (closed) => (series ? capSeriesCircuit(s.emf, s.C1, s.C2, 1, closed) : capParallelCircuit(s.emf, s.C1, s.C2, 1, closed));
   // One dot scale for the screen: the default peak current (18 V through 1 Ω) gives 30 units/s.
-  const scales = { vMin: 0, vMax: s.emf, dotK: 30 / 18, vmax: 80, qPerMark: 12e-6, maxMarks: 14 };
+  const scales = { vMin: 0, vMax: s.emf, dotK: 30 / 18, vmax: 80, qPerMark: 3e-6, maxMarks: 14 };
   const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 250, hmMin: 140, hmMax: 170 });
   const tauDefault = estimateTimeConstants(build(true)).tauMin;
   const runner = new TransientRunner({ timeScale: tauDefault / 1.2 });
@@ -580,7 +580,7 @@ function mountSharing(container, life) {
     'C<sub>1</sub> starts charged; C<sub>2</sub> starts empty. Close the switch: charge flows through the wire until both tops are at the same height. Then count the energy.');
   const s = { C1: RANGES.shareC1.value, C2: RANGES.shareC2.value, V0: RANGES.shareV.value, Rw: RANGES.shareRw.value };
   const layout = chargeSharingLayout();
-  const scales = { vMin: 0, vMax: RANGES.shareV.value, dotK: 0.25, vmax: 80, qPerMark: 80e-6, maxMarks: 14 };
+  const scales = { vMin: 0, vMax: RANGES.shareV.value, dotK: 0.25, vmax: 80, qPerMark: 20e-6, maxMarks: 14 };
   const view = new CircuitView(sim, life, { layout, pieces: layout.pieces, scales, dotsNote: true, maxHeight: 250, hmMin: 140, hmMax: 170 });
   const tauDefault = estimateTimeConstants(chargeSharingCircuit(s.C1, s.V0, s.C2, s.Rw, true)).tauMin;
   const timeScale = tauDefault / 1.5;
@@ -746,11 +746,11 @@ function makeCapSolveCtx(sim, life) {
         layout.elements.C1.plateScale = plateScaleFor(p.C1);
         layout.elements.C2.plateScale = plateScaleFor(p.C2);
         const tau = estimateTimeConstants(capSeriesCircuit(p.emf, p.C1, p.C2, 1, true)).tauMin;
-        circuitPanel(layout, c, { vMin: 0, vMax: p.emf, dotK: 30 / p.emf, vmax: 80, qPerMark: p.emf * 1e-6, maxMarks: 14 }, tau / 1.2);
+        circuitPanel(layout, c, { vMin: 0, vMax: p.emf, dotK: 30 / p.emf, vmax: 80, qPerMark: p.emf * 0.25e-6, maxMarks: 14 }, tau / 1.2);
       } else {
         const c = chargeSharingCircuit(p.C1, p.V0, p.C2, 1, false);
         const tau = estimateTimeConstants(chargeSharingCircuit(p.C1, p.V0, p.C2, 1, true)).tauMin;
-        circuitPanel(chargeSharingLayout(), c, { vMin: 0, vMax: p.V0, dotK: 30 / p.V0, vmax: 80, qPerMark: (p.C1 * p.V0) / 12, maxMarks: 14 }, tau / 1.5);
+        circuitPanel(chargeSharingLayout(), c, { vMin: 0, vMax: p.V0, dotK: 30 / p.V0, vmax: 80, qPerMark: (p.C1 * p.V0) / 40, maxMarks: 14 }, tau / 1.5);
       }
     },
     highlight(x) {
