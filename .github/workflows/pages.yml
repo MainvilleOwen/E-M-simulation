@@ -4,7 +4,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main, claude/new-session-yifgk1]
+    branches: [claude/new-session-yifgk1]  # the repo default branch: Pages only deploys from it
   workflow_dispatch:
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
