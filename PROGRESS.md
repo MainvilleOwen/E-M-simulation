@@ -12,11 +12,11 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [x] Phase 5: M3 Capacitors (plate lab, series vs parallel, charge sharing, 3 solve problems; e2e green; checks/phase5 reviewed)
 - [x] Phase 6: M4 Fields & dipoles (sandbox, dipole, 2 solve problems; e2e green; checks/phase6 reviewed)
 - [x] Phase 7: Home, intro, polish, fresh-eyes review (review issues fixed; npm run check green)
-- [ ] Phase 8: Deploy to GitHub Pages: blocked on Owen (gh auth invalid in container; see DEPLOY.md)
+- [x] Phase 8: Deployed to GitHub Pages: https://mainvilleowen.github.io/E-M-simulation/ (live smoke tests green)
 - [ ] Stretch: Inside a resistor
 
-IN PROGRESS: Phase 8, waiting for Owen to confirm making the repo public and enabling Pages
-Next: Owen follows DEPLOY.md (merge to main, Settings → Pages → GitHub Actions), then run the live smoke test. Optional stretch: "Inside a resistor".
+IN PROGRESS: none (done). Optional: Stretch "Inside a resistor".
+Next: optional stretch module; pushes to main or the default branch redeploy automatically.
 
 ## Notes
 
@@ -61,7 +61,7 @@ Next: Owen follows DEPLOY.md (merge to main, Settings → Pages → GitHub Actio
 
 ## Blockers
 
-- Deploy: `gh auth status` fails in the container (invalid GH_TOKEN). Steps are in DEPLOY.md.
+None. (Pages deploys only from the repo's default branch, currently claude/new-session-yifgk1.)
 
 ## How to use this (for the student)
 
