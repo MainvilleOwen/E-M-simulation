@@ -24,8 +24,8 @@ const HIST = 600;
 
 const KINDS = {
   wire: { label: 'Wire' },
-  resistor: { label: 'Resistor', unit: 'Ω', min: 1, max: 1000, value: 10, log: true },
-  bulb: { label: 'Bulb', unit: 'Ω', min: 1, max: 100, value: 10, log: true },
+  resistor: { label: 'Resistor', unit: 'Ω', min: 1, max: 100e3, value: 100, log: true },
+  bulb: { label: 'Bulb', unit: 'Ω', min: 1, max: 10e3, value: 10, log: true },
   battery: { label: 'Battery', unit: 'V', min: 1, max: 24, value: 9 },
   capacitor: { label: 'Capacitor', unit: 'F', min: 1e-6, max: 1e-3, value: 100e-6, log: true },
   switch: { label: 'Switch' },
@@ -101,7 +101,7 @@ function toLayout(parts, circuit) {
 export function mount(root, life) {
   root.append(
     h('header', { class: 'module-head' }, h('h1', {}, 'Circuit builder'),
-      h('p', {}, 'Build any circuit. Pick a part, then tap two grid points in the same row or column (or drag between them). Tap a part with Select to see its voltage and current; tapping a switch opens or closes it.')));
+      h('p', {}, 'Build any circuit. Pick a part, then tap two grid points in the same row or column (or drag between them). With Select: tap a part to see its graphs, drag it to move it, tap a switch to open or close it. Delete removes a part (or press Delete).')));
   const { sim, ctrl } = viewBody(root);
   let parts = loadParts();
   let selected = null;
@@ -110,14 +110,20 @@ export function mount(root, life) {
   let charges = {};
   let history = new Map();
   let circuit = null;
+  let tBase = 0;        // sim time carried across rebuilds, so edits never restart the clock
+  let shortWarned = false;
+  let drag = null;      // moving a part: { p, start, dc, dr }
 
   const scales = { vMin: 0, vMax: 10, dotK: 10, vmax: 60, pushPerVolt: 1.2, pRef: 2, qPerMark: 1e-4, maxMarks: 14 };
   const view = new CircuitView(sim, life, {
     layout: { w: BOX.w, h: BOX.h, elements: {}, wires: [] }, pieces: [], scales, box: BOX, heightMap: false,
     dotsNote: true, minHeight: 260, maxHeight: 420, aspect: 0.62, label: 'Circuit builder canvas',
   });
-  view.schem.canvas.classList.add('draggable');
-  const warn = h('p', { class: 'note builder-warn', hidden: true });
+  view.schem.canvas.classList.add('draggable', 'builder-canvas');
+  const warnText = h('span');
+  const warnClose = h('button', { type: 'button', class: 'btn btn-ghost warn-close', 'aria-label': 'Dismiss message' }, '×');
+  const warn = h('div', { class: 'note builder-warn', hidden: true, role: 'status' }, warnText, warnClose);
+  warnClose.addEventListener('click', () => { warn.hidden = true; });
   sim.appendChild(warn);
 
   // Toolbar
@@ -138,18 +144,64 @@ export function mount(root, life) {
   const tc = timeControls({
     onPlay: () => { runner.playing = true; },
     onPause: () => { runner.playing = false; },
-    onReset: () => { charges = {}; history = new Map(); rebuild(); },
+    onReset: () => { charges = {}; history = new Map(); tBase = 0; if (runner.sim) runner.sim = null; rebuild(); },
     onSpeed: (v) => { runner.speed = v; },
   });
   const clockNote = h('p', { class: 'small muted' });
-  const buildCard = ctrlCard(ctrl, 'Build', toolSeg.el, h('div', { class: 'btn-row' }, exampleBtn, clearBtn));
+  const delBtn = h('button', { type: 'button', class: 'btn builder-delete', disabled: true }, 'Delete selected');
+  delBtn.addEventListener('click', () => deleteSelected());
+  const buildCard = ctrlCard(ctrl, 'Build', toolSeg.el, h('div', { class: 'btn-row' }, delBtn, exampleBtn, clearBtn));
   placeResponsive(buildCard, { wideParent: ctrl, narrowParent: sim, narrowAfter: warn }, life);
   const switchList = h('div', { class: 'switch-list' });
   ctrlCard(ctrl, 'Run', tc.el, clockNote, switchList);
 
   function toggleSwitch(p) {
     p.closed = !p.closed;
-    rebuild(true);
+    updateValues();
+    renderSwitches();
+    if (selected === p.id) renderInspector();
+  }
+
+  /** Apply value changes (R, ε, C, switch state) to the running sim without restarting it. */
+  function updateValues() {
+    saveParts(parts);
+    if (!circuit || !runner.sim) { rebuild(true); return; }
+    for (const p of parts) {
+      const el = circuit.elements.find((e) => e.id === p.id);
+      if (!el) continue;
+      if (p.kind === 'resistor' || p.kind === 'bulb') el.R = p.value;
+      else if (p.kind === 'battery') el.V = p.value;
+      else if (p.kind === 'capacitor') {
+        const c = runner.sim.caps.get(p.id);
+        if (c) c.v = (c.v * el.C) / p.value; // the charge stays; its voltage q/C changes
+        el.C = p.value;
+      } else if (p.kind === 'switch') el.closed = !!p.closed;
+    }
+    runner.sim.ok = true;
+    runner.rebuild();
+    pace();
+    view.set({ labels: labelsFor() });
+    shortWarned = false;
+  }
+
+  function labelsFor() {
+    const labels = {};
+    for (const p of parts) {
+      if (p.kind === 'wire') continue;
+      labels[p.id] = p.kind === 'switch' ? `${p.id} ${p.closed ? 'closed' : 'open'}` : f(p.value, KINDS[p.kind].unit);
+    }
+    return labels;
+  }
+
+  /** Pace the clock so the slowest real time constant takes about 3 s on screen. */
+  function pace() {
+    const modes = estimateTimeConstants(circuit).modes.filter((t) => t > 0 && t < 1e3);
+    const tauSlow = modes.length ? modes[modes.length - 1] : 0;
+    runner.timeScale = tauSlow > 0 ? tauSlow / 3 : 1;
+    if (runner.sim && modes.length) runner.sim.setDt(Math.max(modes[0] / 200, tauSlow / 2000));
+    clockNote.textContent = tauSlow > 0
+      ? `Clock: 1 s on screen = ${f(runner.timeScale, 's')} of real time (slowest time constant ${f(tauSlow, 's')}).`
+      : 'No capacitors charging: the currents are steady.';
   }
 
   /** One Open/Close button per switch, so any switch can be flipped without hunting for it. */
@@ -176,7 +228,15 @@ export function mount(root, life) {
   const pI = new LivePlot(plotHost, life, { title: 'Current through the selected part', unit: 'A', color: COLORS.trace2, minHeight: 130, maxHeight: 180 });
   let ro = null;
 
+  function deleteSelected() {
+    if (!selected) return;
+    parts = parts.filter((x) => x.id !== selected);
+    selected = null;
+    rebuild();
+  }
+
   function renderInspector() {
+    delBtn.disabled = !selected;
     insBody.replaceChildren();
     ro = null;
     const p = parts.find((x) => x.id === selected);
@@ -188,13 +248,13 @@ export function mount(root, life) {
     const K = KINDS[p.kind];
     insBody.appendChild(h('p', {}, h('strong', {}, `${K.label} ${p.id}`)));
     if (K.unit) {
-      insBody.appendChild(slider({ label: K.label === 'Battery' ? 'Voltage ε' : K.label === 'Capacitor' ? 'Capacitance C' : 'Resistance R', min: K.min, max: K.max, step: K.log ? undefined : 0.5, log: !!K.log, value: p.value, unit: K.unit, onInput: (v) => { p.value = v; rebuild(true); } }).el);
+      insBody.appendChild(slider({ label: K.label === 'Battery' ? 'Voltage ε' : K.label === 'Capacitor' ? 'Capacitance C' : 'Resistance R', min: K.min, max: K.max, step: K.log ? undefined : 0.5, log: !!K.log, value: p.value, unit: K.unit, onInput: (v) => { p.value = v; updateValues(); } }).el);
     }
     const row = h('div', { class: 'btn-row' });
     if (p.kind === 'battery') row.appendChild(h('button', { type: 'button', class: 'btn', on: { click: () => { [p.a, p.b] = [p.b, p.a]; rebuild(true); } } }, 'Flip + and −'));
     if (p.kind === 'switch') row.appendChild(h('button', { type: 'button', class: 'btn btn-primary inspector-switch', on: { click: () => toggleSwitch(p) } }, p.closed ? 'Open the switch' : 'Close the switch'));
-    if (p.kind === 'capacitor') row.appendChild(h('button', { type: 'button', class: 'btn', on: { click: () => { charges[p.id] = 0; rebuild(true); } } }, 'Discharge it'));
-    row.appendChild(h('button', { type: 'button', class: 'btn btn-ghost', on: { click: () => { parts = parts.filter((x) => x !== p); selected = null; rebuild(); } } }, 'Delete'));
+    if (p.kind === 'capacitor') row.appendChild(h('button', { type: 'button', class: 'btn', on: { click: () => { const c = runner.sim && runner.sim.caps.get(p.id); if (c) c.v = 0; charges[p.id] = 0; updateValues(); } } }, 'Discharge it'));
+    row.appendChild(h('button', { type: 'button', class: 'btn btn-ghost', on: { click: () => deleteSelected() } }, 'Delete'));
     insBody.appendChild(row);
     const items = [
       { key: 'V', label: 'Voltage across', unit: 'V' },
@@ -214,12 +274,7 @@ export function mount(root, life) {
     circuit = toCircuit(parts, charges);
     const layout = toLayout(parts, circuit);
     view.setLayout(layout, []);
-    const labels = {};
-    for (const p of parts) {
-      if (p.kind === 'wire') continue;
-      labels[p.id] = p.kind === 'switch' ? `${p.id} ${p.closed ? 'closed' : 'open'}` : f(p.value, KINDS[p.kind].unit);
-    }
-    view.set({ labels, highlight: new Set(selected ? [selected] : []) });
+    view.set({ labels: labelsFor(), highlight: new Set(selected ? [selected] : []) });
     renderSwitches();
     if (!parts.length) {
       view.setSolution(null);
@@ -227,17 +282,13 @@ export function mount(root, life) {
       renderInspector();
       return;
     }
+    const wasPlaying = runner.sim ? runner.playing : true;
+    if (runner.sim) tBase += runner.sim.t;
     runner.load(circuit);
-    // Pace the clock so the slowest real time constant takes about 3 s on screen
-    const modes = estimateTimeConstants(circuit).modes.filter((t) => t > 0 && t < 1e3);
-    const tauSlow = modes.length ? modes[modes.length - 1] : 0;
-    runner.timeScale = tauSlow > 0 ? tauSlow / 3 : 1;
-    if (runner.sim && modes.length) runner.sim.setDt(Math.max(modes[0] / 200, tauSlow / 2000));
-    runner.playing = true;
-    tc.setPlaying(true);
-    clockNote.textContent = tauSlow > 0
-      ? `Clock: 1 s on screen = ${f(runner.timeScale, 's')} of real time (slowest time constant ${f(tauSlow, 's')}).`
-      : 'No capacitors charging: the currents are steady.';
+    pace();
+    runner.playing = wasPlaying;
+    tc.setPlaying(wasPlaying);
+    shortWarned = false;
     // Scales for this circuit: colour range from the batteries, dot speed from the biggest current now
     const st = runner.state;
     if (st) {
@@ -297,6 +348,26 @@ export function mount(root, life) {
   life.on(view.schem.canvas, 'pointerdown', (ev) => {
     const { x, y } = view.schem.local(ev);
     down = { x, y, g: gridHit(x, y) };
+    if (tool === 'select') {
+      const p = partHit(x, y);
+      if (p) { drag = { p, x, y, dc: 0, dr: 0 }; view.schem.canvas.setPointerCapture(ev.pointerId); }
+    }
+  });
+  life.on(view.schem.canvas, 'pointermove', (ev) => {
+    if (!drag) return;
+    const { x, y } = view.schem.local(ev);
+    const step = G * view.transform().scale;
+    const dc = Math.round((x - drag.x) / step);
+    const dr = Math.round((y - drag.y) / step);
+    const fits = [drag.p.a, drag.p.b].every(([c, r]) => c + dc >= 0 && c + dc < COLS && r + dr >= 0 && r + dr < ROWS);
+    if (fits) { drag.dc = dc; drag.dr = dr; }
+  });
+  life.on(view.schem.canvas, 'pointercancel', () => { drag = null; down = null; });
+  life.on(document, 'keydown', (ev) => {
+    if (!(ev.key === 'Delete' || ev.key === 'Backspace') || !selected) return;
+    if (ev.target && /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) return;
+    ev.preventDefault();
+    deleteSelected();
   });
   life.on(view.schem.canvas, 'pointerup', (ev) => {
     if (!down) return;
@@ -304,6 +375,17 @@ export function mount(root, life) {
     const g = gridHit(x, y);
     const start = down;
     down = null;
+    if (drag) {
+      const d = drag;
+      drag = null;
+      if (d.dc || d.dr) {
+        d.p.a = [d.p.a[0] + d.dc, d.p.a[1] + d.dr];
+        d.p.b = [d.p.b[0] + d.dc, d.p.b[1] + d.dr];
+        selected = d.p.id;
+        rebuild(true);
+        return;
+      }
+    }
     if (tool === 'select' || tool === 'delete') {
       const p = partHit(x, y);
       if (tool === 'delete' && p) { parts = parts.filter((q) => q !== p); if (selected === p.id) selected = null; rebuild(); return; }
@@ -317,14 +399,14 @@ export function mount(root, life) {
     if (!g) return;
     if (pending) { const A = pending; pending = null; if (!place(A, g)) pending = (A.c === g.c && A.r === g.r) ? null : g; } else pending = g;
   });
-  life.on(view.schem.canvas, 'touchstart', (ev) => { if (tool !== 'select') ev.preventDefault(); }, { passive: false });
+  life.on(view.schem.canvas, 'touchstart', (ev) => ev.preventDefault(), { passive: false });
 
   let warnTimer = null;
   function warnMsg(t) {
-    warn.textContent = t;
+    warnText.textContent = t;
     warn.hidden = false;
     if (warnTimer) clearTimeout(warnTimer);
-    warnTimer = setTimeout(() => { warn.hidden = true; }, 3000);
+    warnTimer = setTimeout(() => { warn.hidden = true; }, 5000);
   }
   life.add(() => { if (warnTimer) clearTimeout(warnTimer); });
 
@@ -335,6 +417,12 @@ export function mount(root, life) {
         const [px, py] = T.p([gx(c), gy(r)]);
         ctx.beginPath(); ctx.arc(px, py, 2.2, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(200,210,230,0.35)'; ctx.fill();
+      }
+      if (drag && (drag.dc || drag.dr)) {
+        const [ax, ay] = T.p([gx(drag.p.a[0] + drag.dc), gy(drag.p.a[1] + drag.dr)]);
+        const [bx, by] = T.p([gx(drag.p.b[0] + drag.dc), gy(drag.p.b[1] + drag.dr)]);
+        ctx.setLineDash([6, 5]); ctx.strokeStyle = '#f0e442'; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); ctx.setLineDash([]);
       }
       if (pending) {
         const [px, py] = T.p([gx(pending.c), gy(pending.r)]);
@@ -374,16 +462,17 @@ export function mount(root, life) {
         let hist = history.get(p.id);
         if (!hist) { hist = []; history.set(p.id, hist); }
         const last = hist[hist.length - 1];
-        if (!last || st.t > last[0]) { hist.push([st.t, V, I]); if (hist.length > HIST) hist.shift(); }
+        const tt = tBase + st.t;
+        if (!last || tt > last[0]) { hist.push([tt, V, I]); if (hist.length > HIST) hist.shift(); }
         if (p.id === selected && ro) {
           ro.set('V', V); ro.set('I', Math.abs(I));
           ro.set('P', p.kind === 'battery' ? I * V : Math.abs(I * V));
           if (p.kind === 'capacitor') { ro.set('q', st.q[p.id] || 0); ro.set('U', 0.5 * p.value * V * V); }
         }
       }
-      tc.setClock(`t = ${f(st.t, 's')}`);
+      tc.setClock(`t = ${f(tBase + st.t, 's')}`);
     }
-    if (shorted && warn.hidden) warnMsg('Short circuit: a wire connects across a battery, so the current is huge. Add a resistor.');
+    if (shorted && !shortWarned) { shortWarned = true; warnMsg('Short circuit: a wire connects across a battery, so the current is huge. Add a resistor.'); }
     const hist = selected && history.get(selected);
     if (hist && hist.length > 1 && !plotHost.hidden) {
       const t0 = hist[0][0];

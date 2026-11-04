@@ -472,3 +472,7 @@ body.has-dock .error-banner { bottom: calc(var(--dock-h, 0px) + 12px); }
 .cv-meta .hm-caption { padding: 0 4px; font-size: 0.9375rem; }
 .switch-list { display: grid; gap: 6px; }
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Builder canvas: taps and drags build the circuit, so the browser should not zoom or scroll here */
+.stage canvas.builder-canvas { touch-action: none; }
+.builder-warn { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.warn-close { min-width: 44px; font-size: 1.25rem; }

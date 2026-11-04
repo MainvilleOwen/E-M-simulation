@@ -32,6 +32,26 @@ test('builder: example runs, place parts, select one and see its graphs', async 
   await page.locator('.inspector-switch').click();
   await expect(page.locator('.switch-row')).toContainText('open');
   await page.locator('.inspector-switch').click();
+  // Changing a value does not restart the clock
+  const clock = async () => parseFloat((await page.locator('.tc-clock').innerText()).replace(/[^\d.]/g, ''));
+  p = await gridPoint(page, 7, 2.5);
+  await page.mouse.click(p.x, p.y);
+  await expect(page.locator('.inspector')).toContainText('Capacitor');
+  await page.waitForTimeout(600);
+  const t1 = await clock();
+  await page.locator('.inspector input[type="range"]').first().evaluate((el) => { el.value = String(Number(el.max) / 2); el.dispatchEvent(new Event('input', { bubbles: true })); });
+  await page.waitForTimeout(400);
+  expect(await clock()).toBeGreaterThan(t1);
+  // Drag the bulb (column 4) one column right: it moves
+  await page.locator('.seg', { hasText: 'Select' }).click();
+  let a = await gridPoint(page, 4, 2.5);
+  let b = await gridPoint(page, 6, 2.5);
+  await page.mouse.move(a.x, a.y); await page.mouse.down();
+  await page.mouse.move((a.x + b.x) / 2, a.y, { steps: 4 }); await page.mouse.move(b.x, b.y, { steps: 4 }); await page.mouse.up();
+  await expect(page.locator('.inspector')).toContainText('Bulb');
+  // Delete it with the Delete selected button
+  await page.locator('.builder-delete').click();
+  await expect(page.locator('.inspector')).toContainText('Choose Select');
   // Place a resistor by tapping two points
   await page.locator('.seg', { hasText: 'Resistor' }).click();
   p = await gridPoint(page, 1, 5); await page.mouse.click(p.x, p.y);
