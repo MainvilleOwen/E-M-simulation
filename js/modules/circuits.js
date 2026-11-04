@@ -305,7 +305,7 @@ function comboLabels(p) {
     put('B', f(p.emf, 'V'), 'ε');
     if (stage === 0) {
       put('Ra', `R₁ = ${f(p.Ra, 'Ω')}`, 'R₁'); put('Rb', `R₂ = ${f(p.Rb, 'Ω')}`, 'R₂');
-      put('Rc', [`R₃ = ${f(p.Rc, 'Ω')}`, cur('Rc')], 'R₃'); put('Rd', [`R₄ = ${f(p.Rd, 'Ω')}`, cur('Rd')], 'R₄ (rings)');
+      put('Rc', [`R₃ = ${f(p.Rc, 'Ω')}`, cur('Rc')], 'R₃ ∥ R₄'); put('Rd', [`R₄ = ${f(p.Rd, 'Ω')}`, cur('Rd')], '');
     } else {
       if (stage <= 2) put('Rab', `R₁₂ = ${f(p.Ra + p.Rb, 'Ω')}`, 'R₁₂');
       if (stage === 1) { put('Rc', `R₃ = ${f(p.Rc, 'Ω')}`, 'R₃'); put('Rd', `R₄ = ${f(p.Rd, 'Ω')}`, 'R₄'); }

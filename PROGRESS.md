@@ -11,12 +11,12 @@ Spec: `CLAUDE.md` (re-read it and this file at the start of every session).
 - [x] Phase 4: M2 RC circuits (charging, discharging, 2 solve problems; e2e green; checks/phase4 reviewed)
 - [x] Phase 5: M3 Capacitors (plate lab, series vs parallel, charge sharing, 3 solve problems; e2e green; checks/phase5 reviewed)
 - [x] Phase 6: M4 Fields & dipoles (sandbox, dipole, 2 solve problems; e2e green; checks/phase6 reviewed)
-- [ ] Phase 7: Home, intro, polish, fresh-eyes review
-- [ ] Phase 8: Deploy to GitHub Pages (ask Owen first)
+- [x] Phase 7: Home, intro, polish, fresh-eyes review (review issues fixed; npm run check green)
+- [ ] Phase 8: Deploy to GitHub Pages: blocked on Owen (gh auth invalid in container; see DEPLOY.md)
 - [ ] Stretch: Inside a resistor
 
-IN PROGRESS: Phase 7, home screen + intro + polish + fresh-eyes review
-Next: write js/modules/home.js (4 cards with one-line questions), js/ui/intro.js (30-second "How to read this app": height = voltage, dots = current, push arrows; first visit + reopen from header), NaN guard banner check, e2e for home/intro, then the fresh-eyes subagent review and fixes.
+IN PROGRESS: Phase 8, waiting for Owen to confirm making the repo public and enabling Pages
+Next: Owen follows DEPLOY.md (merge to main, Settings → Pages → GitHub Actions), then run the live smoke test. Optional stretch: "Inside a resistor".
 
 ## Notes
 
@@ -61,4 +61,12 @@ Next: write js/modules/home.js (4 cards with one-line questions), js/ui/intro.js
 
 ## Blockers
 
-None.
+- Deploy: `gh auth status` fails in the container (invalid GH_TOKEN). Steps are in DEPLOY.md.
+
+## How to use this (for the student)
+
+- Start with **Circuits** (the home screen marks it "Start here"), then RC, Capacitors, Fields. Each takes 3 to 5 minutes.
+- **Height = voltage.** The battery is a lift that raises charge by ε. Wires are flat. A resistor is a downhill ramp (drop IR). A capacitor is a step of height q/C. Colour shows height too (legend under each circuit).
+- **Dots = current.** Faster dots mean more current. Dots are never used up at a junction: as many leave as arrive.
+- **Pink arrows = push.** Each resistor's arrow is as long as its voltage drop. In RC circuits, watch the net push ε − q/C shrink.
+- When asked to predict, choose before the sim runs. Then use Solve: step through a worked problem and try a variation.
